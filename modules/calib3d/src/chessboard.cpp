@@ -8,10 +8,10 @@
 #include "math.h"
 
 //#define CV_DETECTORS_CHESSBOARD_DEBUG
-#ifdef CV_DETECTORS_CHESSBOARD_DEBUG
-#include <opencv2/highgui.hpp>
-static cv::Mat debug_image;
-#endif
+//#ifdef CV_DETECTORS_CHESSBOARD_DEBUG
+//#include <opencv2/highgui.hpp>
+//static cv::Mat debug_image;
+//#endif
 
 using namespace std;
 namespace cv {
@@ -3529,10 +3529,10 @@ Chessboard::BState Chessboard::generateBoards(cv::flann::Index &flann_index,cons
     {
 #ifdef CV_DETECTORS_CHESSBOARD_DEBUG
         cv::Mat out;
-        cv::drawKeypoints(img,kpoints,out,cv::Scalar(0,0,255,255),4);
+        cv::drawKeypoints(img,kpoints,out,cv::Scalar(0,0,255,255),cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
         std::vector<cv::KeyPoint> temp;
         temp.push_back(kpoints.front());
-        cv::drawKeypoints(out,temp,out,cv::Scalar(0,255,0,255),4);
+        cv::drawKeypoints(out,temp,out,cv::Scalar(0,255,0,255),cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
         cv::imshow("chessboard",out);
         cv::waitKey(-1);
 #endif
@@ -3874,6 +3874,7 @@ bool findChessboardCornersSB(cv::InputArray image_, cv::Size pattern_size,
     {
         Mat tmp;
         cv::equalizeHist(img, tmp);
+        //cv::imshow("equalizeHist", tmp);
         swap(img, tmp);
         flags ^= CALIB_CB_NORMALIZE_IMAGE;
     }
@@ -3907,6 +3908,19 @@ bool findChessboardCornersSB(cv::InputArray image_, cv::Size pattern_size,
 
     std::vector<cv::Mat> maps;
     details::Chessboard::Board board = detector.detectImpl(img,maps,cv::Mat());
+    //std::string s = "res";
+    //int i = 0;
+    //for (const auto& map : maps)
+    //{
+    //    Mat color_map, norm_map;
+    //    double max_val = 0.0, min_val = 0.0;
+    //    cv::minMaxLoc(map, &min_val, &max_val);
+    //    std::cout << "max val " << max_val << std::endl << "min val " << min_val << std::endl;
+    //    map.convertTo(norm_map, CV_8UC1, 255.0 / max_val);
+    //    applyColorMap(norm_map, color_map, cv::ColormapTypes::COLORMAP_JET);
+    //    cv::imwrite(s + std::to_string(i++) + ".png", color_map);
+    //}
+
     corners = board.getKeyPoints();
     if(corners.empty())
     {
