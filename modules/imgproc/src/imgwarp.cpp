@@ -1079,7 +1079,7 @@ typedef void (*RemapFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
                           const Mat& _fxy, const void* _wtab,
                           int borderType, const Scalar& _borderValue);
 
-template <class IdxType>
+template <class IdxType> // short or int
 class RemapInvoker :
     public ParallelLoopBody
 {
@@ -1100,7 +1100,7 @@ public:
         // There is no uint32 cv::Mat implementation. Therefore, I have to do this:
         using MatUIdxType = typename std::conditional<std::is_same<IdxType, int>::value, IdxType, UIdxType>::type;
         int x, y, x1, y1;
-        const int buf_size = 1 << 14;
+        const int buf_size = 1 << 14; // ???
         int brows0 = std::min(128, dst->rows), map_depth = m1->depth();
         int bcols0 = std::min(buf_size/brows0, dst->cols);
         brows0 = std::min(buf_size/bcols0, dst->rows);
@@ -1182,14 +1182,14 @@ public:
                 Mat bufa(_bufa, Rect(0, 0, bcols, brows));
                 for( y1 = 0; y1 < brows; y1++ )
                 {
-                    short* XY = bufxy.ptr<short>(y1);
-                    ushort* A = bufa.ptr<ushort>(y1);
+                    IdxType* XY = bufxy.ptr<IdxType>(y1);
+                    UIdxType* A = bufa.ptr<UIdxType>(y1);
 
                     if( m1->type() == CV_16SC2 && (m2->type() == CV_16UC1 || m2->type() == CV_16SC1) )
                     {
                         bufxy = (*m1)(Rect(x, y, bcols, brows));
 
-                        const ushort* sA = m2->ptr<ushort>(y+y1) + x;
+                        const UIdxType* sA = m2->ptr<UIdxType>(y+y1) + x;
                         x1 = 0;
 
                         #if CV_SIMD128
@@ -1236,9 +1236,9 @@ public:
                             int sx = cvRound(sX[x1]*INTER_TAB_SIZE);
                             int sy = cvRound(sY[x1]*INTER_TAB_SIZE);
                             int v = (sy & (INTER_TAB_SIZE-1))*INTER_TAB_SIZE + (sx & (INTER_TAB_SIZE-1));
-                            XY[x1*2] = saturate_cast<short>(sx >> INTER_BITS);
-                            XY[x1*2+1] = saturate_cast<short>(sy >> INTER_BITS);
-                            A[x1] = (ushort)v;
+                            XY[x1*2] = saturate_cast<IdxType>(sx >> INTER_BITS);
+                            XY[x1*2+1] = saturate_cast<IdxType>(sy >> INTER_BITS);
+                            A[x1] = static_cast<UIdxType>(v);
                         }
                     }
                     else
@@ -1276,9 +1276,9 @@ public:
                             int sx = cvRound(sXY[x1*2]*INTER_TAB_SIZE);
                             int sy = cvRound(sXY[x1*2+1]*INTER_TAB_SIZE);
                             int v = (sy & (INTER_TAB_SIZE-1))*INTER_TAB_SIZE + (sx & (INTER_TAB_SIZE-1));
-                            XY[x1*2] = saturate_cast<short>(sx >> INTER_BITS);
-                            XY[x1*2+1] = saturate_cast<short>(sy >> INTER_BITS);
-                            A[x1] = (ushort)v;
+                            XY[x1*2] = saturate_cast<IdxType>(sx >> INTER_BITS);
+                            XY[x1*2+1] = saturate_cast<IdxType>(sy >> INTER_BITS);
+                            A[x1] = static_cast<UIdxType>(v);
                         }
                     }
                 }
@@ -1678,37 +1678,37 @@ void cv::remap( InputArray _src, OutputArray _dst,
 
     static RemapNNFunc nn_tab[][8] = // TODO: replace to std::array?
     {
-        {remapNearest<uchar>, remapNearest<schar>, remapNearest<ushort>, remapNearest<short>,
-        remapNearest<int>, remapNearest<float>, remapNearest<double>, nullptr},
+        {remapNearest<uchar, short>, remapNearest<schar, short>, remapNearest<ushort, short>, remapNearest<short, short>,
+        remapNearest<int, short>, remapNearest<float, short>, remapNearest<double, short>, nullptr},
         {remapNearest<uchar, int>, remapNearest<schar, int>, remapNearest<ushort, int>, remapNearest<short, int>,
          remapNearest<int, int>, remapNearest<float, int>, remapNearest<double, int>, nullptr}
     };
 
     static RemapFunc linear_tab[] =
     {
-        remapBilinear<FixedPtCast<int, uchar, INTER_REMAP_COEF_BITS>, RemapVec_8u, short>, 0,
+        remapBilinear<FixedPtCast<int, uchar, INTER_REMAP_COEF_BITS>, RemapVec_8u, short>, nullptr,
         remapBilinear<Cast<float, ushort>, RemapNoVec, float>,
-        remapBilinear<Cast<float, short>, RemapNoVec, float>, 0,
+        remapBilinear<Cast<float, short>, RemapNoVec, float>, nullptr,
         remapBilinear<Cast<float, float>, RemapNoVec, float>,
-        remapBilinear<Cast<double, double>, RemapNoVec, float>, 0
+        remapBilinear<Cast<double, double>, RemapNoVec, float>, nullptr
     };
 
     static RemapFunc cubic_tab[] =
     {
-        remapBicubic<FixedPtCast<int, uchar, INTER_REMAP_COEF_BITS>, short, INTER_REMAP_COEF_SCALE>, 0,
+        remapBicubic<FixedPtCast<int, uchar, INTER_REMAP_COEF_BITS>, short, INTER_REMAP_COEF_SCALE>, nullptr,
         remapBicubic<Cast<float, ushort>, float, 1>,
-        remapBicubic<Cast<float, short>, float, 1>, 0,
+        remapBicubic<Cast<float, short>, float, 1>, nullptr,
         remapBicubic<Cast<float, float>, float, 1>,
-        remapBicubic<Cast<double, double>, float, 1>, 0
+        remapBicubic<Cast<double, double>, float, 1>, nullptr
     };
 
     static RemapFunc lanczos4_tab[] =
     {
-        remapLanczos4<FixedPtCast<int, uchar, INTER_REMAP_COEF_BITS>, short, INTER_REMAP_COEF_SCALE>, 0,
+        remapLanczos4<FixedPtCast<int, uchar, INTER_REMAP_COEF_BITS>, short, INTER_REMAP_COEF_SCALE>, nullptr,
         remapLanczos4<Cast<float, ushort>, float, 1>,
-        remapLanczos4<Cast<float, short>, float, 1>, 0,
+        remapLanczos4<Cast<float, short>, float, 1>, nullptr,
         remapLanczos4<Cast<float, float>, float, 1>,
-        remapLanczos4<Cast<double, double>, float, 1>, 0
+        remapLanczos4<Cast<double, double>, float, 1>, nullptr
     };
 
     CV_Assert( !_map1.empty() );
@@ -1732,7 +1732,6 @@ void cv::remap( InputArray _src, OutputArray _dst,
         ((borderType & BORDER_ISOLATED) != 0 || !src.isSubmatrix()),
         openvx_remap(src, dst, map1, map2, interpolation, borderValue));
 
-    //CV_Assert( dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX );
     CV_Assert( dst.cols < INT_MAX && dst.rows < INT_MAX && src.cols < INT_MAX && src.rows < INT_MAX );
 
     if( dst.data == src.data )
@@ -1785,12 +1784,13 @@ void cv::remap( InputArray _src, OutputArray _dst,
 #endif
 
     RemapNNFunc nnfunc = nullptr;
-    RemapFunc ifunc = 0;
+    RemapFunc ifunc = nullptr;
     const void* ctab = 0;
     bool fixpt = depth == CV_8U;
     bool planar_input = false;
     const int large_image = dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX ?
                             0 : 1;
+    CV_Assert( large_image == 0 || interpolation == INTER_NEAREST);
 
     if( interpolation == INTER_NEAREST )
     {
@@ -1811,7 +1811,7 @@ void cv::remap( InputArray _src, OutputArray _dst,
         }
         else
             CV_Error( CV_StsBadArg, "Unknown interpolation method" );
-        CV_Assert( ifunc != 0 );
+        CV_Assert( ifunc != nullptr );
         ctab = initInterTab2D( interpolation, fixpt );
     }
 

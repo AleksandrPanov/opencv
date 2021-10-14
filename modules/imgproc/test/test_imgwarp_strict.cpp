@@ -74,6 +74,7 @@ public:
     virtual void run(int);
 protected:
     virtual void generate_test_data();
+    virtual void generate_large_test_data();
 
     virtual void run_func() = 0;
     virtual void run_reference_func() = 0;
@@ -89,6 +90,8 @@ protected:
     Mat src;
     Mat dst;
     Mat reference_dst;
+private:
+    void generate_test_data(const Size& imgSize);
 };
 
 CV_ImageWarpBaseTest::CV_ImageWarpBaseTest() :
@@ -139,13 +142,10 @@ Size CV_ImageWarpBaseTest::randSize(RNG& rng) const
     return size;
 }
 
-void CV_ImageWarpBaseTest::generate_test_data()
+void CV_ImageWarpBaseTest::generate_test_data(const Size& ssize)
 {
     RNG& rng = ts->get_rng();
-
-    // generating the src matrix structure
-    Size ssize = randSize(rng), dsize;
-
+    Size dsize;
     int depth = rng.uniform(0, CV_64F);
     while (depth == CV_8S || depth == CV_32S)
         depth = rng.uniform(0, CV_64F);
@@ -211,6 +211,25 @@ void CV_ImageWarpBaseTest::generate_test_data()
 
     if (interpolation == INTER_AREA && (scale_x < 1.0 || scale_y < 1.0))
         interpolation = INTER_LINEAR;
+}
+
+void CV_ImageWarpBaseTest::generate_test_data()
+{
+    RNG& rng = ts->get_rng();
+
+    // generating the src matrix structure
+    Size imgSize = randSize(rng);
+    generate_test_data(imgSize);
+}
+
+void CV_ImageWarpBaseTest::generate_large_test_data()
+{
+    RNG& rng = ts->get_rng();
+    // generating the src matrix structure
+    Size imgSize = randSize(rng);
+    imgSize.width += SHRT_MAX;
+    //imgSize.height += SHRT_MAX;
+    generate_test_data(imgSize);
 }
 
 void CV_ImageWarpBaseTest::run(int)
@@ -693,7 +712,7 @@ class CV_Remap_Test :
     public CV_ImageWarpBaseTest
 {
 public:
-    CV_Remap_Test();
+    CV_Remap_Test(bool _testLargeImg = false);
 
     virtual ~CV_Remap_Test();
 
@@ -714,6 +733,7 @@ protected:
     remap_func funcs[2];
 
 private:
+    bool testLargeImg;
     void remap_nearest(const Mat&, Mat&);
     void remap_generic(const Mat&, Mat&);
 
@@ -722,8 +742,8 @@ private:
     virtual void validate_results() const;
 };
 
-CV_Remap_Test::CV_Remap_Test() :
-    CV_ImageWarpBaseTest(), borderType(-1)
+CV_Remap_Test::CV_Remap_Test(bool _testLargeImg) :
+    CV_ImageWarpBaseTest(), borderType(-1), testLargeImg(_testLargeImg)
 {
     funcs[0] = &CV_Remap_Test::remap_nearest;
     funcs[1] = &CV_Remap_Test::remap_generic;
@@ -735,13 +755,21 @@ CV_Remap_Test::~CV_Remap_Test()
 
 void CV_Remap_Test::generate_test_data()
 {
-    CV_ImageWarpBaseTest::generate_test_data();
+    if (testLargeImg && interpolation == INTER_NEAREST)
+    {
+        CV_ImageWarpBaseTest::generate_large_test_data();
+    }
+    else
+    {
+        CV_ImageWarpBaseTest::generate_test_data();
+    }
 
     RNG& rng = ts->get_rng();
     borderType = rng.uniform(1, BORDER_WRAP);
     borderValue = Scalar::all(rng.uniform(0, 255));
 
     // generating the mapx, mapy matrices
+    // TODO: map can be only CV_32F !!!!
     static const int mapx_types[] = { CV_16SC2, CV_32FC1, CV_32FC2 };
     mapx.create(dst.size(), mapx_types[rng.uniform(0, sizeof(mapx_types) / sizeof(int))]);
     mapy.release();
@@ -751,6 +779,7 @@ void CV_Remap_Test::generate_test_data()
 
     switch (mapx.type())
     {
+        // TODO: map can be only CV_32FC2???
         case CV_16SC2:
         {
             MatIterator_<Vec2s> begin_x = mapx.begin<Vec2s>(), end_x = mapx.end<Vec2s>();
@@ -829,7 +858,14 @@ void CV_Remap_Test::generate_test_data()
 
 void CV_Remap_Test::run_func()
 {
-    remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
+    if (testLargeImg == false)
+    {
+        remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
+    }
+    else if (interpolation == INTER_NEAREST)
+    {
+        remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
+    }
 }
 
 void CV_Remap_Test::convert_maps()
@@ -1294,6 +1330,7 @@ void CV_WarpPerspective_Test::warpPerspective(const Mat& _src, Mat& _dst)
 
 TEST(Imgproc_Resize_Test, accuracy) { CV_Resize_Test test; test.safe_run(); }
 TEST(Imgproc_Remap_Test, accuracy) { CV_Remap_Test test; test.safe_run(); }
+TEST(Imgproc_Remap_Large_Test, accuracy) { CV_Remap_Test test(true); test.safe_run(); }
 TEST(Imgproc_WarpAffine_Test, accuracy) { CV_WarpAffine_Test test; test.safe_run(); }
 TEST(Imgproc_WarpPerspective_Test, accuracy) { CV_WarpPerspective_Test test; test.safe_run(); }
 
