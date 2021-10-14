@@ -57,6 +57,7 @@
 #include "imgwarp.hpp"
 
 using namespace cv;
+#define CV_SIMD128 0 // TODO: fix
 
 namespace cv
 {
@@ -326,10 +327,11 @@ static inline int clip(int x, int a, int b)
 *                       General warping (affine, perspective, remap)                     *
 \****************************************************************************************/
 
-template<typename T>
-static void remapNearest( const Mat& _src, Mat& _dst, const Mat& _xy,
+template<typename T, typename IdxType=short>
+static void remapNearest( const Mat& _src, Mat& _dst, const Mat& _xy, //_xy must have IdxType, may be should use Mat_
                           int borderType, const Scalar& _borderValue )
 {
+    static_assert(std::is_same<short, IdxType>::value || std::is_same<int, IdxType>::value);
     Size ssize = _src.size(), dsize = _dst.size();
     const int cn = _src.channels();
     const T* S0 = _src.ptr<T>();
@@ -350,13 +352,13 @@ static void remapNearest( const Mat& _src, Mat& _dst, const Mat& _xy,
     for(int dy = 0; dy < dsize.height; dy++ )
     {
         T* D = _dst.ptr<T>(dy);
-        const short* XY = _xy.ptr<short>(dy);
+        const IdxType* XY = _xy.ptr<IdxType>(dy);
 
         if( cn == 1 )
         {
             for(int dx = 0; dx < dsize.width; dx++ )
             {
-                int sx = XY[dx*2], sy = XY[dx*2+1];
+                int sx = static_cast<int>(XY[dx*2]), sy = static_cast<int>(XY[dx*2+1]);
                 if( (unsigned)sx < width1 && (unsigned)sy < height1 )
                     D[dx] = S0[sy*sstep + sx];
                 else
@@ -382,7 +384,7 @@ static void remapNearest( const Mat& _src, Mat& _dst, const Mat& _xy,
         {
             for(int dx = 0; dx < dsize.width; dx++, D += cn )
             {
-                int sx = XY[dx*2], sy = XY[dx*2+1];
+                int sx = static_cast<int>(XY[dx*2]), sy = static_cast<int>(XY[dx*2+1]);
                 const T *S;
                 if( (unsigned)sx < width1 && (unsigned)sy < height1 )
                 {
@@ -1077,6 +1079,7 @@ typedef void (*RemapFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
                           const Mat& _fxy, const void* _wtab,
                           int borderType, const Scalar& _borderValue);
 
+template <class IdxType>
 class RemapInvoker :
     public ParallelLoopBody
 {
@@ -1088,19 +1091,24 @@ public:
         borderType(_borderType), borderValue(_borderValue),
         planar_input(_planar_input), nnfunc(_nnfunc), ifunc(_ifunc), ctab(_ctab)
     {
+        static_assert(std::is_same<short, IdxType>::value || std::is_same<int, IdxType>::value);
     }
 
     virtual void operator() (const Range& range) const CV_OVERRIDE
     {
+        using UIdxType = typename std::make_unsigned<IdxType>::type;
+        // There is no uint32 cv::Mat implementation. Therefore, I have to do this:
+        using MatUIdxType = typename std::conditional<std::is_same<IdxType, int>::value, IdxType, UIdxType>::type;
         int x, y, x1, y1;
         const int buf_size = 1 << 14;
         int brows0 = std::min(128, dst->rows), map_depth = m1->depth();
         int bcols0 = std::min(buf_size/brows0, dst->cols);
         brows0 = std::min(buf_size/bcols0, dst->rows);
 
-        Mat _bufxy(brows0, bcols0, CV_16SC2), _bufa;
+        Mat_<Vec<IdxType, 2>> _bufxy(brows0, bcols0);
+        Mat_<Vec<MatUIdxType, 1>> _bufa;
         if( !nnfunc )
-            _bufa.create(brows0, bcols0, CV_16UC1);
+            _bufa.create(brows0, bcols0);
 
         for( y = range.start; y < range.end; y += brows0 )
         {
@@ -1119,9 +1127,9 @@ public:
                     {
                         for( y1 = 0; y1 < brows; y1++ )
                         {
-                            short* XY = bufxy.ptr<short>(y1);
-                            const short* sXY = m1->ptr<short>(y+y1) + x*2;
-                            const ushort* sA = m2->ptr<ushort>(y+y1) + x;
+                            IdxType* XY = bufxy.ptr<IdxType>(y1);
+                            const IdxType* sXY = m1->ptr<IdxType>(y+y1) + x*2;
+                            const UIdxType* sA = m2->ptr<UIdxType>(y+y1) + x;
 
                             for( x1 = 0; x1 < bcols; x1++ )
                             {
@@ -1137,7 +1145,7 @@ public:
                     {
                         for( y1 = 0; y1 < brows; y1++ )
                         {
-                            short* XY = bufxy.ptr<short>(y1);
+                            IdxType* XY = bufxy.ptr<IdxType>(y1);
                             const float* sX = m1->ptr<float>(y+y1) + x;
                             const float* sY = m2->ptr<float>(y+y1) + x;
                             x1 = 0;
@@ -1155,14 +1163,14 @@ public:
                                     v_int16x8 dx, dy;
                                     dx = v_pack(ix0, ix1);
                                     dy = v_pack(iy0, iy1);
-                                    v_store_interleave(XY + x1 * 2, dx, dy);
+                                    //v_store_interleave(XY + x1 * 2, dx, dy);  // TODO: fix
                                 }
                             }
                             #endif
                             for( ; x1 < bcols; x1++ )
                             {
-                                XY[x1*2] = saturate_cast<short>(sX[x1]);
-                                XY[x1*2+1] = saturate_cast<short>(sY[x1]);
+                                XY[x1*2] = saturate_cast<IdxType>(sX[x1]);
+                                XY[x1*2+1] = saturate_cast<IdxType>(sY[x1]);
                             }
                         }
                     }
@@ -1170,6 +1178,7 @@ public:
                     continue;
                 }
 
+                // TODO: finish for other types of interpolation
                 Mat bufa(_bufa, Rect(0, 0, bcols, brows));
                 for( y1 = 0; y1 < brows; y1++ )
                 {
@@ -1667,10 +1676,12 @@ void cv::remap( InputArray _src, OutputArray _dst,
 {
     CV_INSTRUMENT_REGION();
 
-    static RemapNNFunc nn_tab[] =
+    static RemapNNFunc nn_tab[][8] = // TODO: replace to std::array?
     {
-        remapNearest<uchar>, remapNearest<schar>, remapNearest<ushort>, remapNearest<short>,
-        remapNearest<int>, remapNearest<float>, remapNearest<double>, 0
+        {remapNearest<uchar>, remapNearest<schar>, remapNearest<ushort>, remapNearest<short>,
+        remapNearest<int>, remapNearest<float>, remapNearest<double>, nullptr},
+        {remapNearest<uchar, int>, remapNearest<schar, int>, remapNearest<ushort, int>, remapNearest<short, int>,
+         remapNearest<int, int>, remapNearest<float, int>, remapNearest<double, int>, nullptr}
     };
 
     static RemapFunc linear_tab[] =
@@ -1721,7 +1732,8 @@ void cv::remap( InputArray _src, OutputArray _dst,
         ((borderType & BORDER_ISOLATED) != 0 || !src.isSubmatrix()),
         openvx_remap(src, dst, map1, map2, interpolation, borderValue));
 
-    CV_Assert( dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX );
+    //CV_Assert( dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX );
+    CV_Assert( dst.cols < INT_MAX && dst.rows < INT_MAX && src.cols < INT_MAX && src.rows < INT_MAX );
 
     if( dst.data == src.data )
         src = src.clone();
@@ -1772,16 +1784,18 @@ void cv::remap( InputArray _src, OutputArray _dst,
     }
 #endif
 
-    RemapNNFunc nnfunc = 0;
+    RemapNNFunc nnfunc = nullptr;
     RemapFunc ifunc = 0;
     const void* ctab = 0;
     bool fixpt = depth == CV_8U;
     bool planar_input = false;
+    const int large_image = dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX ?
+                            0 : 1;
 
     if( interpolation == INTER_NEAREST )
     {
-        nnfunc = nn_tab[depth];
-        CV_Assert( nnfunc != 0 );
+        nnfunc = nn_tab[large_image][depth];
+        CV_Assert( nnfunc != nullptr );
     }
     else
     {
@@ -1816,10 +1830,18 @@ void cv::remap( InputArray _src, OutputArray _dst,
         planar_input = map1.channels() == 1;
     }
 
-    RemapInvoker invoker(src, dst, m1, m2,
-                         borderType, borderValue, planar_input, nnfunc, ifunc,
-                         ctab);
-    parallel_for_(Range(0, dst.rows), invoker, dst.total()/(double)(1<<16));
+    if (large_image == 0)
+    {
+        RemapInvoker<short> invoker(RemapInvoker<short>(src, dst, m1, m2, borderType, borderValue,
+                                                        planar_input, nnfunc, ifunc, ctab));
+        parallel_for_(Range(0, dst.rows), invoker, dst.total() / (double) (1 << 16));
+    }
+    else
+    {
+        RemapInvoker<int> invoker(RemapInvoker<int>(src, dst, m1, m2, borderType, borderValue,
+                                                    planar_input, nnfunc, ifunc, ctab));
+        parallel_for_(Range(0, dst.rows), invoker, dst.total() / (double) (1 << 16));
+    }
 }
 
 
