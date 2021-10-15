@@ -769,9 +769,11 @@ void CV_Remap_Test::generate_test_data()
     borderValue = Scalar::all(rng.uniform(0, 255));
 
     // generating the mapx, mapy matrices
-    // TODO: map can be only CV_32F !!!!
-    static const int mapx_types[] = { CV_16SC2, CV_32FC1, CV_32FC2 };
-    mapx.create(dst.size(), mapx_types[rng.uniform(0, sizeof(mapx_types) / sizeof(int))]);
+    // TODO: map can be only CV_32F??? !!!!
+    //static const int mapx_types[] = { CV_16SC2, CV_32FC1, CV_32FC2 };
+    static const int mapx_types[] = { CV_32FC2 };
+    //mapx.create(dst.size(), mapx_types[rng.uniform(0, sizeof(mapx_types) / sizeof(int))]);
+    mapx.create(dst.size(), CV_32FC2);
     mapy.release();
 
     const int n = std::min(std::min(src.cols, src.rows) / 10 + 1, 2);
@@ -779,7 +781,7 @@ void CV_Remap_Test::generate_test_data()
 
     switch (mapx.type())
     {
-        // TODO: map can be only CV_32FC2???
+        // TODO: map can be only CV_32FC???
         case CV_16SC2:
         {
             MatIterator_<Vec2s> begin_x = mapx.begin<Vec2s>(), end_x = mapx.end<Vec2s>();
@@ -858,28 +860,25 @@ void CV_Remap_Test::generate_test_data()
 
 void CV_Remap_Test::run_func()
 {
-    if (testLargeImg == false)
-    {
-        remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
-    }
-    else if (interpolation == INTER_NEAREST)
-    {
-        remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
-    }
+    remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
 }
 
 void CV_Remap_Test::convert_maps()
 {
-    if (mapx.type() != CV_16SC2)
-        convertMaps(mapx.clone(), mapy.clone(), mapx, mapy, CV_16SC2, interpolation == INTER_NEAREST);
-    else if (interpolation != INTER_NEAREST)
-        if (mapy.type() != CV_16UC1)
-            mapy.clone().convertTo(mapy, CV_16UC1);
+    // TODO: fix for int32
+    if (testLargeImg == false)
+    {
+        if (mapx.type() != CV_16SC2)
+            convertMaps(mapx.clone(), mapy.clone(), mapx, mapy, CV_16SC2, interpolation == INTER_NEAREST);
+        else if (interpolation != INTER_NEAREST)
+            if (mapy.type() != CV_16UC1)
+                mapy.clone().convertTo(mapy, CV_16UC1);
 
-    if (interpolation == INTER_NEAREST)
-        mapy = Mat();
-    CV_Assert(((interpolation == INTER_NEAREST && mapy.empty()) || mapy.type() == CV_16UC1 ||
-               mapy.type() == CV_16SC1) && mapx.type() == CV_16SC2);
+        if (interpolation == INTER_NEAREST)
+            mapy = Mat();
+        CV_Assert(((interpolation == INTER_NEAREST && mapy.empty()) || mapy.type() == CV_16UC1 ||
+                   mapy.type() == CV_16SC1) && mapx.type() == CV_16SC2);
+    }
 }
 
 const char* CV_Remap_Test::borderType_to_string() const
@@ -918,6 +917,7 @@ void CV_Remap_Test::remap_nearest(const Mat& _src, Mat& _dst)
 {
     CV_Assert(_src.depth() == CV_32F && _dst.type() == _src.type());
     CV_Assert(mapx.type() == CV_16SC2 && mapy.empty());
+    auto tmp = CV_16SC2;
 
     Size ssize = _src.size(), dsize = _dst.size();
     CV_Assert(!ssize.empty() && !dsize.empty());

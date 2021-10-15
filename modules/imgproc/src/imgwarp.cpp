@@ -1844,7 +1844,7 @@ void cv::remap( InputArray _src, OutputArray _dst,
     }
 }
 
-
+// TODO: fix for int32
 void cv::convertMaps( InputArray _map1, InputArray _map2,
                       OutputArray _dstmap1, OutputArray _dstmap2,
                       int dstm1type, bool nninterpolate )
