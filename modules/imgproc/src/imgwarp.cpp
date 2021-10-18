@@ -1798,7 +1798,7 @@ void cv::remap( InputArray _src, OutputArray _dst,
     CV_Assert( large_image == 0 || interpolation == INTER_NEAREST);
     if (large_image)
     {
-        map1.convertTo(map1, CV_16SC2);
+        //map1.convertTo(map1, CV_16SC2);
         map1.convertTo(map1, CV_32FC2);
     }
 
