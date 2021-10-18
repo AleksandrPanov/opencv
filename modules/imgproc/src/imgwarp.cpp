@@ -1788,9 +1788,19 @@ void cv::remap( InputArray _src, OutputArray _dst,
     const void* ctab = 0;
     bool fixpt = depth == CV_8U;
     bool planar_input = false;
-    const int large_image = dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX ?
-                            0 : 1;
+    const int large_image = (dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX &&
+                             map1.type() != CV_32SC1 && map1.type() != CV_32SC2 && map2.type() != CV_32SC1 &&
+                             map2.type() != CV_32SC2) ? 0 : 1;
+    int a1 = CV_32SC1;
+    int a2 = CV_32SC2;
+    int a3 = map1.type();
+    int a4 = map2.type();
     CV_Assert( large_image == 0 || interpolation == INTER_NEAREST);
+    if (large_image)
+    {
+        map1.convertTo(map1, CV_16SC2);
+        map1.convertTo(map1, CV_32FC2);
+    }
 
     if( interpolation == INTER_NEAREST )
     {
@@ -1922,13 +1932,13 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
     {
         const float* src1f = m1->ptr<float>(y);
         const float* src2f = m2->ptr<float>(y);
-        const short* src1 = (const short*)src1f;
-        const ushort* src2 = (const ushort*)src2f;
+        const short* src1 =  m1->ptr<short>(y);
+        const ushort* src2 = m2->ptr<ushort>(y);
 
         float* dst1f = dstmap1.ptr<float>(y);
         float* dst2f = dstmap2.ptr<float>(y);
-        short* dst1 = (short*)dst1f;
-        ushort* dst2 = (ushort*)dst2f;
+        short* dst1 = dstmap1.ptr<short>(y);
+        ushort* dst2 = dstmap2.ptr<ushort>(y);
         x = 0;
 
         if( m1type == CV_32FC1 && dstm1type == CV_16SC2 )

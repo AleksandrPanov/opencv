@@ -91,7 +91,7 @@ protected:
     Mat dst;
     Mat reference_dst;
 private:
-    void generate_test_data(const Size& imgSize);
+    void generate_test_data(const Size& imgSize, bool test_int32_remap);
 };
 
 CV_ImageWarpBaseTest::CV_ImageWarpBaseTest() :
@@ -142,7 +142,7 @@ Size CV_ImageWarpBaseTest::randSize(RNG& rng) const
     return size;
 }
 
-void CV_ImageWarpBaseTest::generate_test_data(const Size& ssize)
+void CV_ImageWarpBaseTest::generate_test_data(const Size& ssize, bool test_int32_remap)
 {
     RNG& rng = ts->get_rng();
     Size dsize;
@@ -176,6 +176,8 @@ void CV_ImageWarpBaseTest::generate_test_data(const Size& ssize)
 
     // generating an interpolation type
     interpolation = rng.uniform(0, CV_INTER_LANCZOS4 + 1);
+    if (test_int32_remap)
+        interpolation = INTER_NEAREST;
 
     // generating the dst matrix structure
     double scale_x, scale_y;
@@ -219,7 +221,7 @@ void CV_ImageWarpBaseTest::generate_test_data()
 
     // generating the src matrix structure
     Size imgSize = randSize(rng);
-    generate_test_data(imgSize);
+    generate_test_data(imgSize, true);
 }
 
 void CV_ImageWarpBaseTest::generate_large_test_data()
@@ -229,7 +231,7 @@ void CV_ImageWarpBaseTest::generate_large_test_data()
     Size imgSize = randSize(rng);
     imgSize.width += SHRT_MAX;
     //imgSize.height += SHRT_MAX;
-    generate_test_data(imgSize);
+    generate_test_data(imgSize, true);
 }
 
 void CV_ImageWarpBaseTest::run(int)
@@ -712,7 +714,7 @@ class CV_Remap_Test :
     public CV_ImageWarpBaseTest
 {
 public:
-    CV_Remap_Test(bool _testLargeImg = false);
+    CV_Remap_Test(bool test_int32_remap = false);
 
     virtual ~CV_Remap_Test();
 
@@ -733,7 +735,7 @@ protected:
     remap_func funcs[2];
 
 private:
-    bool testLargeImg;
+    bool test_int32_remap;
     void remap_nearest(const Mat&, Mat&);
     void remap_generic(const Mat&, Mat&);
 
@@ -742,8 +744,8 @@ private:
     virtual void validate_results() const;
 };
 
-CV_Remap_Test::CV_Remap_Test(bool _testLargeImg) :
-    CV_ImageWarpBaseTest(), borderType(-1), testLargeImg(_testLargeImg)
+CV_Remap_Test::CV_Remap_Test(bool test_int32_remap) :
+        CV_ImageWarpBaseTest(), borderType(-1), test_int32_remap(test_int32_remap)
 {
     funcs[0] = &CV_Remap_Test::remap_nearest;
     funcs[1] = &CV_Remap_Test::remap_generic;
@@ -755,14 +757,7 @@ CV_Remap_Test::~CV_Remap_Test()
 
 void CV_Remap_Test::generate_test_data()
 {
-    if (testLargeImg && interpolation == INTER_NEAREST)
-    {
-        CV_ImageWarpBaseTest::generate_large_test_data();
-    }
-    else
-    {
-        CV_ImageWarpBaseTest::generate_test_data();
-    }
+    CV_ImageWarpBaseTest::generate_test_data();
 
     RNG& rng = ts->get_rng();
     borderType = rng.uniform(1, BORDER_WRAP);
@@ -771,9 +766,9 @@ void CV_Remap_Test::generate_test_data()
     // generating the mapx, mapy matrices
     // TODO: map can be only CV_32F??? !!!!
     //static const int mapx_types[] = { CV_16SC2, CV_32FC1, CV_32FC2 };
-    static const int mapx_types[] = { CV_32FC2 };
+    static const int mapx_types[] = { CV_16SC2 };
     //mapx.create(dst.size(), mapx_types[rng.uniform(0, sizeof(mapx_types) / sizeof(int))]);
-    mapx.create(dst.size(), CV_32FC2);
+    mapx.create(dst.size(), CV_16SC2);
     mapy.release();
 
     const int n = std::min(std::min(src.cols, src.rows) / 10 + 1, 2);
@@ -858,27 +853,56 @@ void CV_Remap_Test::generate_test_data()
     }
 }
 
+// TODO: add check max element < max short
+static void checkAndTryCastToInt16(Mat& map)
+{
+    int map_type = map.type();
+    if (map_type == CV_32SC2)
+    {
+        map.convertTo(map, CV_16SC2);
+    }
+    else if (map_type == CV_32SC1)
+    {
+        map.convertTo(map, CV_16SC1);
+    }
+}
+
+// TODO: add check max element < max short
+        static void CastToInt32(Mat& map)
+        {
+            int map_type = map.type();
+            if (map_type == CV_16SC2 || map_type == CV_16UC2)
+            {
+                map.convertTo(map, CV_32SC2);
+            }
+            else if (map_type == CV_16SC1 || map_type == CV_16UC1)
+            {
+                map.convertTo(map, CV_32SC2);
+            }
+        }
+
 void CV_Remap_Test::run_func()
 {
+    CastToInt32(mapx);
+    CastToInt32(mapy);
     remap(src, dst, mapx, mapy, interpolation, borderType, borderValue);
+    checkAndTryCastToInt16(mapx);
+    checkAndTryCastToInt16(mapy);
 }
 
 void CV_Remap_Test::convert_maps()
 {
     // TODO: fix for int32
-    if (testLargeImg == false)
-    {
-        if (mapx.type() != CV_16SC2)
-            convertMaps(mapx.clone(), mapy.clone(), mapx, mapy, CV_16SC2, interpolation == INTER_NEAREST);
-        else if (interpolation != INTER_NEAREST)
-            if (mapy.type() != CV_16UC1)
-                mapy.clone().convertTo(mapy, CV_16UC1);
+    if (mapx.type() != CV_16SC2)
+        convertMaps(mapx.clone(), mapy.clone(), mapx, mapy, CV_16SC2, interpolation == INTER_NEAREST);
+    else if (interpolation != INTER_NEAREST)
+        if (mapy.type() != CV_16UC1)
+            mapy.clone().convertTo(mapy, CV_16UC1);
 
-        if (interpolation == INTER_NEAREST)
-            mapy = Mat();
-        CV_Assert(((interpolation == INTER_NEAREST && mapy.empty()) || mapy.type() == CV_16UC1 ||
-                   mapy.type() == CV_16SC1) && mapx.type() == CV_16SC2);
-    }
+    if (interpolation == INTER_NEAREST)
+        mapy = Mat();
+    CV_Assert(((interpolation == INTER_NEAREST && mapy.empty()) || mapy.type() == CV_16UC1 ||
+               mapy.type() == CV_16SC1) && mapx.type() == CV_16SC2);
 }
 
 const char* CV_Remap_Test::borderType_to_string() const
@@ -963,6 +987,12 @@ void CV_Remap_Test::remap_nearest(const Mat& _src, Mat& _dst)
 
 void CV_Remap_Test::remap_generic(const Mat& _src, Mat& _dst)
 {
+    int a1 = mapx.type();
+    int a2 = mapy.type();
+    int a3 = CV_32SC2;
+    int a4 = CV_32SC1;
+    int a5 = CV_16SC2;
+    int a6 = CV_16SC1;
     CV_Assert(mapx.type() == CV_16SC2 && mapy.type() == CV_16UC1);
 
     int ksize = 2;
@@ -984,8 +1014,8 @@ void CV_Remap_Test::remap_generic(const Mat& _src, Mat& _dst)
 
     for (int dy = 0; dy < dsize.height; ++dy)
     {
-        const short* yMx = mapx.ptr<short>(dy);
-        const ushort* yMy = mapy.ptr<ushort>(dy);
+        const int* yMx = mapx.ptr<int>(dy);
+        const unsigned int* yMy = mapy.ptr<unsigned int>(dy);
 
         float* yD = _dst.ptr<float>(dy);
 
