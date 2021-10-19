@@ -1014,8 +1014,8 @@ void CV_Remap_Test::remap_generic(const Mat& _src, Mat& _dst)
 
     for (int dy = 0; dy < dsize.height; ++dy)
     {
-        const int* yMx = mapx.ptr<int>(dy);
-        const unsigned int* yMy = mapy.ptr<unsigned int>(dy);
+        const short* yMx = mapx.ptr<short>(dy);
+        const unsigned short* yMy = mapy.ptr<unsigned short>(dy);
 
         float* yD = _dst.ptr<float>(dy);
 

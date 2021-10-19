@@ -1317,7 +1317,7 @@ static bool ocl_remap(InputArray _src, OutputArray _dst, InputArray _map1, Input
     if( (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.empty())) ||
         (map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.empty())) )
     {
-        if (map1.type() != CV_16SC2)
+        if (map1.type() != CV_16SC2) // TODO: never called, line CV_Assert( !_map1.empty() );
             std::swap(map1, map2);
     }
     else
@@ -1669,6 +1669,84 @@ private:
 #endif
 
 }
+static std::string errorRemapMessage =
+        "floatingPoint_xy: map1 having the type CV_32FC2; map2 is empty\n"
+        "floatingPoint_x_y: map1 having the type CV_32FC1; map2 having the type CV_32FC1\n"
+        "fixedPointInt16: map1 having the type CV_16SC2; map2 having the type CV_16UC1\n"
+        "fixedPointInt32: map1 having the type CV_32SC2; map2 having the type CV_16UC1\n"
+        "int16: map1 having the type CV_16SC2; map2 is empty\n"
+        "int32: map1 having the type CV_32SC2; map2 is empty\n";
+
+enum remapType
+{
+    floatingPoint_xy,
+    floatingPoint_x_y,
+    fixedPointInt16,
+    fixedPointInt32, // TODO: check this
+    int16,
+    int32, // TODO: check this
+    errorType
+};
+
+//template <class MatType>
+static remapType check_remap_type(Mat &map1, Mat &map2)
+{
+    remapType type = remapType::errorType;
+    CV_Assert(!map1.empty() || !map2.empty());
+    if (map1.depth() == CV_32F || map2.depth() == CV_32F)
+    {
+        if (map2.type() == CV_32FC2)
+            std::swap(map1, map2);
+        CV_Assert((map1.type() == CV_32FC2 && map2.empty()) ||
+                  (map1.type() == CV_32FC1 && map2.type() == CV_32FC1));
+        if (map1.type() == CV_32FC2)
+            return floatingPoint_xy;
+        return floatingPoint_x_y;
+    }
+    else if (map1.channels() == 2 || map2.channels() == 2)
+    {
+        if (map2.channels() == 2)
+            std::swap(map1, map2);
+        // fixedPointInt or int
+        if (map2.channels() == 1)
+        {
+            // fixedPointInt16 or fixedPointInt32
+            if (map1.type() == CV_16SC2 && map2.type() == CV_16UC2)
+            {
+                return fixedPointInt16;
+            }
+            else if (map1.type() == CV_32SC2 && map2.type() == CV_16UC2)
+            {
+                return fixedPointInt32;
+            }
+            else
+            {
+                CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
+            }
+        }
+        else if (map2.empty())
+        {
+            // int16 or int32
+            if (map1.type() == CV_16SC2)
+            {
+                return int16;
+            }
+            else if (map1.type() == CV_32SC2)
+            {
+                return int32;
+            }
+            else
+            {
+                CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
+            }
+        }
+        else
+        {
+            CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
+        }
+    }
+    return type;
+}
 
 void cv::remap( InputArray _src, OutputArray _dst,
                 InputArray _map1, InputArray _map2,
@@ -1798,7 +1876,6 @@ void cv::remap( InputArray _src, OutputArray _dst,
     CV_Assert( large_image == 0 || interpolation == INTER_NEAREST);
     if (large_image)
     {
-        //map1.convertTo(map1, CV_16SC2);
         map1.convertTo(map1, CV_32FC2);
     }
 
