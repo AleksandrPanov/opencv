@@ -1077,16 +1077,27 @@ typedef void (*RemapFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
                           const Mat& _fxy, const void* _wtab,
                           int borderType, const Scalar& _borderValue);
 
+enum RemapType
+{
+    floatingPoint_xy,
+    floatingPoint_x_y,
+    fixedPointInt16,
+    fixedPointInt32, // TODO: check this
+    int16,
+    int32, // TODO: check this
+    errorType
+};
+
 class RemapInvoker :
     public ParallelLoopBody
 {
 public:
     RemapInvoker(const Mat& _src, Mat& _dst, const Mat *_m1,
                  const Mat *_m2, int _borderType, const Scalar &_borderValue,
-                 int _planar_input, RemapNNFunc _nnfunc, RemapFunc _ifunc, const void *_ctab) :
+                 int _planar_input, RemapNNFunc _nnfunc, RemapFunc _ifunc, const void *_ctab, RemapType _remapType) :
         ParallelLoopBody(), src(&_src), dst(&_dst), m1(_m1), m2(_m2),
         borderType(_borderType), borderValue(_borderValue),
-        planar_input(_planar_input), nnfunc(_nnfunc), ifunc(_ifunc), ctab(_ctab)
+        planar_input(_planar_input), nnfunc(_nnfunc), ifunc(_ifunc), ctab(_ctab), remapType(_remapType)
     {
     }
 
@@ -1094,7 +1105,7 @@ public:
     {
         int x, y, x1, y1;
         const int buf_size = 1 << 14;
-        int brows0 = std::min(128, dst->rows), map_depth = m1->depth();
+        int brows0 = std::min(128, dst->rows);
         int bcols0 = std::min(buf_size/brows0, dst->cols);
         brows0 = std::min(buf_size/bcols0, dst->rows);
 
@@ -1113,9 +1124,9 @@ public:
 
                 if( nnfunc )
                 {
-                    if( m1->type() == CV_16SC2 && m2->empty() ) // the data is already in the right format
+                    if( remapType == RemapType::int16 ) // the data is already in the right format
                         bufxy = (*m1)(Rect(x, y, bcols, brows));
-                    else if( map_depth != CV_32F )
+                    else if( remapType != RemapType::floatingPoint_xy && remapType != RemapType::floatingPoint_x_y)
                     {
                         for( y1 = 0; y1 < brows; y1++ )
                         {
@@ -1176,7 +1187,7 @@ public:
                     short* XY = bufxy.ptr<short>(y1);
                     ushort* A = bufa.ptr<ushort>(y1);
 
-                    if( m1->type() == CV_16SC2 && (m2->type() == CV_16UC1 || m2->type() == CV_16SC1) )
+                    if( remapType == RemapType::fixedPointInt16 )
                     {
                         bufxy = (*m1)(Rect(x, y, bcols, brows));
 
@@ -1288,6 +1299,7 @@ private:
     RemapNNFunc nnfunc;
     RemapFunc ifunc;
     const void *ctab;
+    const RemapType remapType;
 };
 
 #ifdef HAVE_OPENCL
@@ -1661,6 +1673,76 @@ private:
 
 }
 
+static std::string errorRemapMessage =
+        "floatingPoint_xy: map1 having the type CV_32FC2; map2 is empty\n"
+        "floatingPoint_x_y: map1 having the type CV_32FC1; map2 having the type CV_32FC1\n"
+        "fixedPointInt16: map1 having the type CV_16SC2; map2 having the type CV_16UC1 or CV_16SC1\n"
+        "fixedPointInt32: map1 having the type CV_32SC2; map2 having the type CV_16UC1 or CV_16SC1\n"
+        "int16: map1 having the type CV_16SC2; map2 is empty\n"
+        "int32: map1 having the type CV_32SC2; map2 is empty\n";
+
+//template <class MatType>
+static RemapType check_remap_type(Mat &map1, Mat &map2)
+{
+    RemapType type = RemapType::errorType;
+    CV_Assert(!map1.empty() || !map2.empty());
+    if (map1.depth() == CV_32F || map2.depth() == CV_32F)
+    {
+        if (map2.type() == CV_32FC2)
+            std::swap(map1, map2);
+        CV_Assert((map1.type() == CV_32FC2 && map2.empty()) ||
+                  (map1.type() == CV_32FC1 && map2.type() == CV_32FC1));
+        if (map1.type() == CV_32FC2)
+            return floatingPoint_xy;
+        return floatingPoint_x_y;
+    }
+    else if (map1.channels() == 2 || map2.channels() == 2)
+    {
+        if (map2.channels() == 2)
+            std::swap(map1, map2);
+
+        // int or fixedPoint
+        if (map2.empty())
+        {
+            // int16 or int32
+            if (map1.type() == CV_16SC2)
+            {
+                return int16;
+            }
+            else if (map1.type() == CV_32SC2)
+            {
+                return int32;
+            }
+            else
+            {
+                CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
+            }
+        }
+        else if (map2.channels() == 1)
+        {
+            // fixedPointInt16 or fixedPointInt32
+            if (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1))
+            {
+                return fixedPointInt16;
+            }
+            else if (map1.type() == CV_32SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1))
+            {
+                return fixedPointInt32;
+            }
+            else
+            {
+                CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
+            }
+        }
+        else
+        {
+            CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
+        }
+    }
+    CV_Assert(type != RemapType::errorType);
+    return type;
+}
+
 void cv::remap( InputArray _src, OutputArray _dst,
                 InputArray _map1, InputArray _map2,
                 int interpolation, int borderType, const Scalar& borderValue )
@@ -1707,6 +1789,7 @@ void cv::remap( InputArray _src, OutputArray _dst,
                ocl_remap(_src, _dst, _map1, _map2, interpolation, borderType, borderValue))
 
     Mat src = _src.getMat(), map1 = _map1.getMat(), map2 = _map2.getMat();
+    const RemapType remapType = check_remap_type(map1, map2);
     _dst.create( map1.size(), src.type() );
     Mat dst = _dst.getMat();
 
@@ -1803,22 +1886,14 @@ void cv::remap( InputArray _src, OutputArray _dst,
 
     const Mat *m1 = &map1, *m2 = &map2;
 
-    if( (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1 || map2.empty())) ||
-        (map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.type() == CV_16SC1 || map1.empty())) )
+    if (remapType == RemapType::floatingPoint_x_y)
     {
-        if( map1.type() != CV_16SC2 )
-            std::swap(m1, m2);
-    }
-    else
-    {
-        CV_Assert( ((map1.type() == CV_32FC2 || map1.type() == CV_16SC2) && map2.empty()) ||
-            (map1.type() == CV_32FC1 && map2.type() == CV_32FC1) );
-        planar_input = map1.channels() == 1;
+        planar_input = true;
     }
 
     RemapInvoker invoker(src, dst, m1, m2,
                          borderType, borderValue, planar_input, nnfunc, ifunc,
-                         ctab);
+                         ctab, remapType);
     parallel_for_(Range(0, dst.rows), invoker, dst.total()/(double)(1<<16));
 }
 
