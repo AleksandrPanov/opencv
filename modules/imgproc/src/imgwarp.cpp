@@ -1070,7 +1070,7 @@ static void remapLanczos4( const Mat& _src, Mat& _dst, const Mat& _xy,
 }
 
 
-typedef void (*RemapNNFunc)(const Mat& _src, Mat& dst, const Mat& _xy,
+typedef void (*RemapNNFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
                             int borderType, const Scalar& _borderValue );
 
 typedef void (*RemapFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
@@ -1084,8 +1084,7 @@ enum RemapType
     fixedPointInt16,
     fixedPointInt32, // TODO: check this
     int16,
-    int32, // TODO: check this
-    errorType
+    int32 // TODO: check this
 };
 
 class RemapInvoker :
@@ -1105,7 +1104,7 @@ public:
     {
         int x, y, x1, y1;
         const int buf_size = 1 << 14;
-        int brows0 = std::min(128, dst->rows);
+        int brows0 = std::min(128, dst->rows), map_depth = m1->depth();
         int bcols0 = std::min(buf_size/brows0, dst->cols);
         brows0 = std::min(buf_size/bcols0, dst->rows);
 
@@ -1126,7 +1125,7 @@ public:
                 {
                     if( remapType == RemapType::int16 ) // the data is already in the right format
                         bufxy = (*m1)(Rect(x, y, bcols, brows));
-                    else if( remapType != RemapType::fp16_mapxy && remapType != RemapType::fp16_mapx_mapy)
+                    else if( map_depth != CV_32F )
                     {
                         for( y1 = 0; y1 < brows; y1++ )
                         {
@@ -1676,7 +1675,8 @@ static RemapType check_remap_type(Mat &map1, Mat &map2)
     CV_Assert(!map1.empty() || !map2.empty());
     if (map2.channels() == 2 && !map2.empty())
         std::swap(map1, map2);
-    CV_Assert((map2.empty() && map1.channels() == 2) || (!map2.empty() && map1.size() == map2.size()));
+    CV_Assert((map2.empty() && map1.channels() == 2) ||
+              (!map2.empty() && map1.size() == map2.size() && map2.channels() == 1));
 
     if (map1.depth() == CV_32F || map2.depth() == CV_32F) // fp16_mapxy or fp16_mapx_mapy
     {
