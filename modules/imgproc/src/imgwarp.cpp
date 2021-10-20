@@ -1305,7 +1305,7 @@ private:
 #ifdef HAVE_OPENCL
 
 static bool ocl_remap(InputArray _src, OutputArray _dst, InputArray _map1, InputArray _map2,
-                      int interpolation, int borderType, const Scalar& borderValue)
+                      int interpolation, int borderType, const Scalar& borderValue, RemapType remapType)
 {
     const ocl::Device & dev = ocl::Device::getDefault();
     int cn = _src.channels(), type = _src.type(), depth = _src.depth(),
@@ -1317,28 +1317,17 @@ static bool ocl_remap(InputArray _src, OutputArray _dst, InputArray _map1, Input
 
     UMat src = _src.getUMat(), map1 = _map1.getUMat(), map2 = _map2.getUMat();
 
-    if( (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.empty())) ||
-        (map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.empty())) )
-    {
-        if (map1.type() != CV_16SC2)
-            std::swap(map1, map2);
-    }
-    else
-        CV_Assert( map1.type() == CV_32FC2 || (map1.type() == CV_32FC1 && map2.type() == CV_32FC1) );
-
     _dst.create(map1.size(), type);
     UMat dst = _dst.getUMat();
 
     String kernelName = "remap";
-    if (map1.type() == CV_32FC2 && map2.empty())
+    if (remapType == RemapType::fp16_mapxy)
         kernelName += "_32FC2";
-    else if (map1.type() == CV_16SC2)
-    {
+    else if (remapType == RemapType::int16)
         kernelName += "_16SC2";
-        if (!map2.empty())
-            kernelName += "_16UC1";
-    }
-    else if (map1.type() == CV_32FC1 && map2.type() == CV_32FC1)
+    else if (remapType == RemapType::fixedPointInt16)
+        kernelName += "_16SC2_16UC1";
+    else if (remapType == RemapType::fp16_mapx_mapy)
         kernelName += "_2_32FC1";
     else
         CV_Error(Error::StsBadArg, "Unsupported map types");
@@ -1679,63 +1668,41 @@ static std::string errorRemapMessage =
         "fixedPointInt16: map1 having the type CV_16SC2; map2 having the type CV_16UC1 or CV_16SC1\n"
         "fixedPointInt32: map1 having the type CV_32SC2; map2 having the type CV_16UC1 or CV_16SC1\n"
         "int16: map1 having the type CV_16SC2; map2 is empty\n"
-        "int32: map1 having the type CV_32SC2; map2 is empty\n";
+        "int32: map1 having the type CV_32SC2; map2 is empty\n"
+        "If map2 isn't empty, map1.size() must be equal to map2.size().\n";
 
 static RemapType check_remap_type(Mat &map1, Mat &map2)
 {
-    RemapType type = RemapType::errorType;
     CV_Assert(!map1.empty() || !map2.empty());
+    if (map2.channels() == 2 && !map2.empty())
+        std::swap(map1, map2);
+    CV_Assert((map2.empty() && map1.channels() == 2) || (!map2.empty() && map1.size() == map2.size()));
+
     if (map1.depth() == CV_32F || map2.depth() == CV_32F) // fp16_mapxy or fp16_mapx_mapy
     {
-        if (map2.type() == CV_32FC2)
-            std::swap(map1, map2);
-        CV_Assert((map1.type() == CV_32FC2 && map2.empty()) ||
-                  (map1.type() == CV_32FC1 && map2.type() == CV_32FC1));
-        if (map1.type() == CV_32FC2)
+        if (map1.type() == CV_32FC2 && map2.empty())
             return fp16_mapxy;
-        return fp16_mapx_mapy;
+        else if (map1.type() == CV_32FC1 && map2.type() == CV_32FC1)
+            return fp16_mapx_mapy;
     }
-    else if (map1.channels() == 2 || map2.channels() == 2) // int or fixedPoint
+    else if (map1.channels() == 2) // int or fixedPointInt
     {
-        if (map2.channels() == 2)
-            std::swap(map1, map2);
-        if (map2.empty())
+        if (map2.empty()) // int16 or int32
         {
             if (map1.type() == CV_16SC2) // int16
-            {
                 return int16;
-            }
-            else if (map1.type() == CV_32SC2)
-            {
+            else if (map1.type() == CV_32SC2) // int32
                 return int32;
-            }
-            else
-            {
-                CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
-            }
         }
-        else if (map2.channels() == 1) // fixedPointInt16
+        else if (map2.channels() == 1) // fixedPointInt16 or fixedPointInt32
         {
-            if (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1))
-            {
+            if (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1)) // fixedPointInt16
                 return fixedPointInt16;
-            }
-            else if (map1.type() == CV_32SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1))
-            {
+            else if (map1.type() == CV_32SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1)) // fixedPointInt32
                 return fixedPointInt32;
-            }
-            else
-            {
-                CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
-            }
-        }
-        else
-        {
-            CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
         }
     }
-    CV_Assert(type != RemapType::errorType);
-    return type;
+    CV_Error(cv::Error::StsBadSize, errorRemapMessage.data());
 }
 
 void cv::remap( InputArray _src, OutputArray _dst,
@@ -1778,13 +1745,12 @@ void cv::remap( InputArray _src, OutputArray _dst,
     };
 
     CV_Assert( !_map1.empty() );
-    CV_Assert( _map2.empty() || (_map2.size() == _map1.size()));
-
-    CV_OCL_RUN(_src.dims() <= 2 && _dst.isUMat(),
-               ocl_remap(_src, _dst, _map1, _map2, interpolation, borderType, borderValue))
-
     Mat src = _src.getMat(), map1 = _map1.getMat(), map2 = _map2.getMat();
     const RemapType remapType = check_remap_type(map1, map2);
+
+    CV_OCL_RUN(_src.dims() <= 2 && _dst.isUMat(),
+               ocl_remap(_src, _dst, _map1, _map2, interpolation, borderType, borderValue, remapType))
+
     _dst.create( map1.size(), src.type() );
     Mat dst = _dst.getMat();
 
