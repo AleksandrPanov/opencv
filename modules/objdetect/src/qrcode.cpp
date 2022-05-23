@@ -2369,7 +2369,7 @@ bool QRDecode::samplingForVersion()
     CV_TRACE_FUNCTION();
     const double multiplyingFactor = (version < 3)  ? 1 :
                                      (version == 3) ? 1.5 :
-                                     version * (version + 1);
+                                     version * 5.0;
     const Size newFactorSize(
                   cvRound(no_border_intermediate.size().width  * multiplyingFactor),
                   cvRound(no_border_intermediate.size().height * multiplyingFactor));
