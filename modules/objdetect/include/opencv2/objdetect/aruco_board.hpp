@@ -11,28 +11,28 @@ namespace cv {
 //! @addtogroup aruco
 //! @{
 
-class Dictionary;
+class ArucoDictionary;
 
 /**
- * @brief Board of markers
+ * @brief BaseArucoBoard of markers
  *
  * A board is a set of markers in the 3D space with a common coordinate system.
  * The common form of a board of marker is a planar (2D) board, however any 3D layout can be used.
- * A Board object is composed by:
+ * A BaseArucoBoard object is composed by:
  * - The object points of the marker corners, i.e. their coordinates respect to the board system.
  * - The dictionary which indicates the type of markers of the board
  * - The identifier of all the markers in the board.
  */
-class CV_EXPORTS_W Board {
+class CV_EXPORTS_W BaseArucoBoard {
 public:
-    CV_WRAP Board();
+    CV_WRAP BaseArucoBoard();
 
-    /** @brief Provide way to create Board by passing necessary data. Specially needed in Python.
+    /** @brief Provide way to create BaseArucoBoard by passing necessary data. Specially needed in Python.
      * @param objPoints array of object points of all the marker corners in the board
      * @param dictionary the dictionary of markers employed for this board
      * @param ids vector of the identifiers of the markers in the board
      */
-    CV_WRAP static Ptr<Board> create(InputArrayOfArrays objPoints, const Ptr<Dictionary> &dictionary, InputArray ids);
+    CV_WRAP static Ptr<BaseArucoBoard> create(InputArrayOfArrays objPoints, const Ptr<ArucoDictionary> &dictionary, InputArray ids);
 
     /** @brief Set ids vector
      * @param ids vector of the identifiers of the markers in the board (should be the same size
@@ -45,7 +45,7 @@ public:
 
     /** @brief change id for ids[index]
      * @param index - element index in ids
-     * @param newId - new value for ids[index], should be less than Dictionary size
+     * @param newId - new value for ids[index], should be less than ArucoDictionary size
      */
     CV_WRAP void changeId(int index, int newId);
     /** @brief return ids
@@ -54,11 +54,11 @@ public:
 
     /** @brief set dictionary
      */
-    CV_WRAP void setDictionary(const Ptr<Dictionary> &dictionary);
+    CV_WRAP void setDictionary(const Ptr<ArucoDictionary> &dictionary);
 
     /** @brief return dictionary
      */
-    CV_WRAP Ptr<Dictionary> getDictionary() const;
+    CV_WRAP Ptr<ArucoDictionary> getDictionary() const;
 
     /** @brief set objPoints
      */
@@ -85,7 +85,7 @@ protected:
     CV_PROP std::vector<std::vector<Point3f> > objPoints;
 
     /// the dictionary of markers employed for this board
-    CV_PROP Ptr<Dictionary> dictionary;
+    CV_PROP Ptr<ArucoDictionary> dictionary;
 
     /// coordinate of the bottom right corner of the board, is set when calling the function create()
     CV_PROP Point3f rightBottomBorder;
@@ -109,9 +109,9 @@ protected:
  * @param borderBits width of the marker borders.
  *
  * This function return the image of a planar board, ready to be printed. It assumes
- * the Board layout specified is planar by ignoring the z coordinates of the object points.
+ * the BaseArucoBoard layout specified is planar by ignoring the z coordinates of the object points.
  */
-CV_EXPORTS_W void drawPlanarBoard(const Ptr<Board> &board, Size outSize, OutputArray img,
+CV_EXPORTS_W void drawPlanarBoard(const Ptr<BaseArucoBoard> &board, Size outSize, OutputArray img,
                                   int marginSize = 0, int borderBits = 1);
 
 /**
@@ -120,9 +120,9 @@ CV_EXPORTS_W void drawPlanarBoard(const Ptr<Board> &board, Size outSize, OutputA
  * The board can be drawn using drawPlanarBoard() function (@sa drawPlanarBoard)
  */
 
-class CV_EXPORTS_W GridBoard : public Board {
+class CV_EXPORTS_W GridArucoBoard : public BaseArucoBoard {
 public:
-    CV_WRAP GridBoard();
+    CV_WRAP GridArucoBoard();
     /**
      * @brief Draw a GridBoard
      *
@@ -150,8 +150,8 @@ public:
      * This functions creates a GridBoard object given the number of markers in each direction and
      * the marker size and marker separation.
      */
-    CV_WRAP static Ptr<GridBoard> create(int markersX, int markersY, float markerLength, float markerSeparation,
-                                         const Ptr<Dictionary> &dictionary, int firstMarker = 0);
+    CV_WRAP static Ptr<GridArucoBoard> create(int markersX, int markersY, float markerLength, float markerSeparation,
+                                         const Ptr<ArucoDictionary> &dictionary, int firstMarker = 0);
 
     CV_WRAP Size getGridSize() const;
     CV_WRAP float getMarkerLength() const;
@@ -160,7 +160,7 @@ public:
 protected:
     struct GridImpl;
     Ptr<GridImpl> gridImpl;
-    friend class CharucoBoard;
+    friend class ChArucoBoard;
 };
 
 /**
@@ -171,9 +171,9 @@ protected:
  * calibration and pose estimation.
  * This class also allows the easy creation and drawing of ChArUco boards.
  */
-class CV_EXPORTS_W CharucoBoard : public Board {
+class CV_EXPORTS_W ChArucoBoard : public BaseArucoBoard {
 public:
-    CV_WRAP CharucoBoard();
+    CV_WRAP ChArucoBoard();
 
     // vector of chessboard 3D corners precalculated
     CV_PROP std::vector<Point3f> chessboardCorners;
@@ -195,20 +195,20 @@ public:
     CV_WRAP void draw(Size outSize, OutputArray img, int marginSize = 0, int borderBits = 1);
 
 
-    /** @brief Create a CharucoBoard object
+    /** @brief Create a ChArucoBoard object
      * @param squaresX number of chessboard squares in X direction
      * @param squaresY number of chessboard squares in Y direction
      * @param squareLength chessboard square side length (normally in meters)
      * @param markerLength marker side length (same unit than squareLength)
      * @param dictionary dictionary of markers indicating the type of markers.
      * The first markers in the dictionary are used to fill the white chessboard squares.
-     * @return the output CharucoBoard object
+     * @return the output ChArucoBoard object
      *
-     * This functions creates a CharucoBoard object given the number of squares in each direction
+     * This functions creates a ChArucoBoard object given the number of squares in each direction
      * and the size of the markers and chessboard squares.
      */
-    CV_WRAP static Ptr<CharucoBoard> create(int squaresX, int squaresY, float squareLength,
-                                            float markerLength, const Ptr<Dictionary> &dictionary);
+    CV_WRAP static Ptr<ChArucoBoard> create(int squaresX, int squaresY, float squareLength,
+                                            float markerLength, const Ptr<ArucoDictionary> &dictionary);
 
     CV_WRAP Size getChessboardSize() const;
     CV_WRAP float getSquareLength() const;
@@ -232,9 +232,16 @@ protected:
  * Axis parallel, as well as diagonal and other straight lines detected.  Degenerate cases:
  * for number of charucoIDs <= 2,the function returns true.
  */
-CV_EXPORTS_W bool testCharucoCornersCollinear(const Ptr<CharucoBoard> &board, InputArray charucoIds);
+CV_EXPORTS_W bool testCharucoCornersCollinear(const Ptr<ChArucoBoard> &board, InputArray charucoIds);
 
 //! @}
+
+// Todo: recheck
+namespace aruco {
+using Board = BaseArucoBoard;
+using GridBoard = GridArucoBoard;
+using CharucoBoard = ChArucoBoard;
+}
 
 }
 

@@ -11,7 +11,7 @@ using namespace std;
 
 /** @brief Implementation of drawPlanarBoard that accepts a raw Board pointer.
  */
-static void _drawPlanarBoardImpl(Board *_board, Size outSize, OutputArray _img, int marginSize, int borderBits) {
+static void _drawPlanarBoardImpl(BaseArucoBoard *_board, Size outSize, OutputArray _img, int marginSize, int borderBits) {
     CV_Assert(!outSize.empty());
     CV_Assert(marginSize >= 0);
 
@@ -54,7 +54,7 @@ static void _drawPlanarBoardImpl(Board *_board, Size outSize, OutputArray _img, 
     }
 
     // now paint each marker
-    Dictionary &dictionary = *(_board->getDictionary());
+    ArucoDictionary &dictionary = *(_board->getDictionary());
     Mat marker;
     Point2f outCorners[3];
     Point2f inCorners[3];
@@ -92,12 +92,12 @@ static void _drawPlanarBoardImpl(Board *_board, Size outSize, OutputArray _img, 
     }
 }
 
-void drawPlanarBoard(const Ptr<Board> &_board, Size outSize, OutputArray _img, int marginSize,
+void drawPlanarBoard(const Ptr<BaseArucoBoard> &_board, Size outSize, OutputArray _img, int marginSize,
                      int borderBits) {
     _drawPlanarBoardImpl(_board, outSize, _img, marginSize, borderBits);
 }
 
-struct GridBoard::GridImpl {
+struct GridArucoBoard::GridImpl {
     GridImpl(){};
     // number of markers in X and Y directions
     int sizeX = 3, sizeY = 3;
@@ -109,11 +109,11 @@ struct GridBoard::GridImpl {
     float markerSeparation = .5f;
 };
 
-GridBoard::GridBoard(): gridImpl(makePtr<GridImpl>()) {}
+GridArucoBoard::GridArucoBoard(): gridImpl(makePtr<GridImpl>()) {}
 
-Board::Board(): dictionary(makePtr<Dictionary>(getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME::DICT_4X4_50))) {}
+BaseArucoBoard::BaseArucoBoard(): dictionary(makePtr<ArucoDictionary>(getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME::DICT_4X4_50))) {}
 
-Ptr<Board> Board::create(InputArrayOfArrays objPoints, const Ptr<Dictionary> &dictionary, InputArray ids) {
+Ptr<BaseArucoBoard> BaseArucoBoard::create(InputArrayOfArrays objPoints, const Ptr<ArucoDictionary> &dictionary, InputArray ids) {
     CV_Assert(objPoints.total() == ids.total());
     CV_Assert(objPoints.type() == CV_32FC3 || objPoints.type() == CV_32FC1);
 
@@ -136,32 +136,32 @@ Ptr<Board> Board::create(InputArrayOfArrays objPoints, const Ptr<Dictionary> &di
         }
         obj_points_vector.push_back(corners);
     }
-    Ptr<Board> res = makePtr<Board>();
+    Ptr<BaseArucoBoard> res = makePtr<BaseArucoBoard>();
     ids.copyTo(res->ids);
     res->objPoints = obj_points_vector;
-    res->dictionary = cv::makePtr<Dictionary>(dictionary);
+    res->dictionary = cv::makePtr<ArucoDictionary>(dictionary);
     res->rightBottomBorder = rightBottomBorder;
     return res;
 }
 
-void Board::setIds(InputArray ids_) {
+void BaseArucoBoard::setIds(InputArray ids_) {
     CV_Assert(objPoints.size() == ids_.total());
     ids_.copyTo(this->ids);
 }
 
-Ptr<Dictionary> Board::getDictionary() const {
+Ptr<ArucoDictionary> BaseArucoBoard::getDictionary() const {
     return this->dictionary;
 }
 
-void Board::setDictionary(const Ptr<Dictionary> &_dictionary) {
+void BaseArucoBoard::setDictionary(const Ptr<ArucoDictionary> &_dictionary) {
     this->dictionary = _dictionary;
 }
 
-const std::vector<std::vector<Point3f> >& Board::getObjPoints() const {
+const std::vector<std::vector<Point3f> >& BaseArucoBoard::getObjPoints() const {
     return this->objPoints;
 }
 
-void Board::setObjPoints(const vector<std::vector<Point3f>> &_objPoints) {
+void BaseArucoBoard::setObjPoints(const vector<std::vector<Point3f>> &_objPoints) {
     CV_Assert(!_objPoints.empty());
     this->objPoints = _objPoints;
     rightBottomBorder = _objPoints.front().front();
@@ -175,24 +175,24 @@ void Board::setObjPoints(const vector<std::vector<Point3f>> &_objPoints) {
     }
 }
 
-const Point3f& Board::getRightBottomBorder() const {
+const Point3f& BaseArucoBoard::getRightBottomBorder() const {
     return this->rightBottomBorder;
 }
 
-const std::vector<int>& Board::getIds() const {
+const std::vector<int>& BaseArucoBoard::getIds() const {
     return this->ids;
 }
 
-void Board::changeId(int index, int newId) {
+void BaseArucoBoard::changeId(int index, int newId) {
     CV_Assert(index >= 0 && index < (int)ids.size());
     CV_Assert(newId >= 0 && newId < dictionary->bytesList.rows);
     this->ids[index] = newId;
 }
 
-Ptr<GridBoard> GridBoard::create(int markersX, int markersY, float markerLength, float markerSeparation,
-                                 const Ptr<Dictionary> &dictionary, int firstMarker) {
+Ptr<GridArucoBoard> GridArucoBoard::create(int markersX, int markersY, float markerLength, float markerSeparation,
+                                 const Ptr<ArucoDictionary> &dictionary, int firstMarker) {
     CV_Assert(markersX > 0 && markersY > 0 && markerLength > 0 && markerSeparation > 0);
-    Ptr<GridBoard> res = makePtr<GridBoard>();
+    Ptr<GridArucoBoard> res = makePtr<GridArucoBoard>();
     res->gridImpl->sizeX = markersX;
     res->gridImpl->sizeY = markersY;
     res->gridImpl->markerLength = markerLength;
@@ -227,23 +227,23 @@ Ptr<GridBoard> GridBoard::create(int markersX, int markersY, float markerLength,
     return res;
 }
 
-void GridBoard::draw(Size outSize, OutputArray _img, int marginSize, int borderBits) {
-    _drawPlanarBoardImpl((Board*)this, outSize, _img, marginSize, borderBits);
+void GridArucoBoard::draw(Size outSize, OutputArray _img, int marginSize, int borderBits) {
+    _drawPlanarBoardImpl((BaseArucoBoard*)this, outSize, _img, marginSize, borderBits);
 }
 
-Size GridBoard::getGridSize() const {
+Size GridArucoBoard::getGridSize() const {
     return Size(gridImpl->sizeX, gridImpl->sizeY);
 }
 
-float GridBoard::getMarkerLength() const {
+float GridArucoBoard::getMarkerLength() const {
     return gridImpl->markerLength;
 }
 
-float GridBoard::getMarkerSeparation() const {
+float GridArucoBoard::getMarkerSeparation() const {
     return gridImpl->markerSeparation;
 }
 
-struct CharucoBoard::CharucoImpl : GridBoard::GridImpl {
+struct ChArucoBoard::CharucoImpl : GridArucoBoard::GridImpl {
     // size of chessboard squares side (normally in meters)
     float squareLength;
 
@@ -251,9 +251,9 @@ struct CharucoBoard::CharucoImpl : GridBoard::GridImpl {
     float markerLength;
 };
 
-CharucoBoard::CharucoBoard(): charucoImpl(makePtr<CharucoImpl>()) {}
+ChArucoBoard::ChArucoBoard(): charucoImpl(makePtr<CharucoImpl>()) {}
 
-void CharucoBoard::draw(Size outSize, OutputArray _img, int marginSize, int borderBits) {
+void ChArucoBoard::draw(Size outSize, OutputArray _img, int marginSize, int borderBits) {
     CV_Assert(!outSize.empty());
     CV_Assert(marginSize >= 0);
 
@@ -318,7 +318,7 @@ void CharucoBoard::draw(Size outSize, OutputArray _img, int marginSize, int bord
 /**
   * Fill nearestMarkerIdx and nearestMarkerCorners arrays
   */
-static inline void _getNearestMarkerCorners(CharucoBoard &board, float squareLength) {
+static inline void _getNearestMarkerCorners(ChArucoBoard &board, float squareLength) {
     board.nearestMarkerIdx.resize(board.chessboardCorners.size());
     board.nearestMarkerCorners.resize(board.chessboardCorners.size());
 
@@ -367,10 +367,10 @@ static inline void _getNearestMarkerCorners(CharucoBoard &board, float squareLen
     }
 }
 
-Ptr<CharucoBoard> CharucoBoard::create(int squaresX, int squaresY, float squareLength,
-                                  float markerLength, const Ptr<Dictionary> &dictionary) {
+Ptr<ChArucoBoard> ChArucoBoard::create(int squaresX, int squaresY, float squareLength,
+                                       float markerLength, const Ptr<ArucoDictionary> &dictionary) {
     CV_Assert(squaresX > 1 && squaresY > 1 && markerLength > 0 && squareLength > markerLength);
-    Ptr<CharucoBoard> res = makePtr<CharucoBoard>();
+    Ptr<ChArucoBoard> res = makePtr<ChArucoBoard>();
 
     res->charucoImpl->sizeX = squaresX;
     res->charucoImpl->sizeY = squaresY;
@@ -416,13 +416,13 @@ Ptr<CharucoBoard> CharucoBoard::create(int squaresX, int squaresY, float squareL
     return res;
 }
 
-Size CharucoBoard::getChessboardSize() const { return Size(charucoImpl->sizeX, charucoImpl->sizeY); }
+Size ChArucoBoard::getChessboardSize() const { return Size(charucoImpl->sizeX, charucoImpl->sizeY); }
 
-float CharucoBoard::getSquareLength() const { return charucoImpl->squareLength; }
+float ChArucoBoard::getSquareLength() const { return charucoImpl->squareLength; }
 
-float CharucoBoard::getMarkerLength() const { return charucoImpl->markerLength; }
+float ChArucoBoard::getMarkerLength() const { return charucoImpl->markerLength; }
 
-bool testCharucoCornersCollinear(const Ptr<CharucoBoard> &_board, InputArray _charucoIds) {
+bool testCharucoCornersCollinear(const Ptr<ChArucoBoard> &_board, InputArray _charucoIds) {
     unsigned int nCharucoCorners = (unsigned int)_charucoIds.getMat().total();
     if (nCharucoCorners <= 2)
         return true;

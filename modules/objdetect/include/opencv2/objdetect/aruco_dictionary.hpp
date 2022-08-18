@@ -22,7 +22,7 @@ namespace cv {
  *
  * `bytesList.ptr(i)[k*nbytes + j]` is then the j-th byte of i-th marker, in its k-th rotation.
  */
-class CV_EXPORTS_W Dictionary {
+class CV_EXPORTS_W ArucoDictionary {
 
     public:
     CV_PROP_RW Mat bytesList;         // marker code information
@@ -30,26 +30,26 @@ class CV_EXPORTS_W Dictionary {
     CV_PROP_RW int maxCorrectionBits; // maximum number of bits that can be corrected
 
 
-    Dictionary(const Mat &_bytesList = Mat(), int _markerSize = 0, int _maxcorr = 0);
+    ArucoDictionary(const Mat &_bytesList = Mat(), int _markerSize = 0, int _maxcorr = 0);
 
 
     /**
     * Dictionary(const Dictionary &_dictionary);
     */
-    Dictionary(const Ptr<Dictionary> &dictionary);
+    ArucoDictionary(const Ptr<ArucoDictionary> &dictionary);
 
 
     /** @brief returns generateCustomDictionary(nMarkers, markerSize, randomSeed)
      * @see generateCustomDictionary
      */
-    CV_WRAP_AS(create) static Ptr<Dictionary> create(int nMarkers, int markerSize, int randomSeed=0);
+    CV_WRAP_AS(create) static Ptr<ArucoDictionary> create(int nMarkers, int markerSize, int randomSeed=0);
 
 
     /** @brief returns generateCustomDictionary(nMarkers, markerSize, baseDictionary, randomSeed)
      * @see generateCustomDictionary
      */
-    CV_WRAP_AS(create_from) static Ptr<Dictionary> create(int nMarkers, int markerSize,
-            const Ptr<Dictionary> &baseDictionary, int randomSeed=0);
+    CV_WRAP_AS(create_from) static Ptr<ArucoDictionary> create(int nMarkers, int markerSize,
+            const Ptr<ArucoDictionary> &baseDictionary, int randomSeed=0);
 
     /**
      * @brief Read a new dictionary from FileNode. Format:\n
@@ -60,7 +60,7 @@ class CV_EXPORTS_W Dictionary {
      * ...\n
      * marker_34: "011111010000111011111110110101100101"
      */
-    CV_WRAP bool readDictionary(const cv::FileNode& fn);
+    CV_WRAP bool readDictionary(const FileNode& fn);
 
     /**
      * @brief Write a dictionary to FileStorage. Format is the same as in readDictionary().
@@ -70,7 +70,7 @@ class CV_EXPORTS_W Dictionary {
     /**
      * @see getPredefinedDictionary
      */
-    CV_WRAP static Ptr<Dictionary> get(int dict);
+    CV_WRAP static Ptr<ArucoDictionary> get(int dict);
 
     /**
      * @brief Given a matrix of bits. Returns whether if marker is identified or not.
@@ -140,19 +140,19 @@ enum PREDEFINED_DICTIONARY_NAME {
 /**
   * @brief Returns one of the predefined dictionaries defined in PREDEFINED_DICTIONARY_NAME
   */
-CV_EXPORTS Ptr<Dictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name);
+CV_EXPORTS Ptr<ArucoDictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name);
 
 
 /**
   * @brief Returns one of the predefined dictionaries referenced by DICT_*.
   */
-CV_EXPORTS_W Ptr<Dictionary> getPredefinedDictionary(int dict);
+CV_EXPORTS_W Ptr<ArucoDictionary> getPredefinedDictionary(int dict);
 
 
 /**
   * @see generateCustomDictionary
   */
-CV_EXPORTS_AS(custom_dictionary) Ptr<Dictionary> generateCustomDictionary(
+CV_EXPORTS_AS(custom_dictionary) Ptr<ArucoDictionary> generateCustomDictionary(
         int nMarkers,
         int markerSize,
         int randomSeed=0);
@@ -171,15 +171,19 @@ CV_EXPORTS_AS(custom_dictionary) Ptr<Dictionary> generateCustomDictionary(
   * included and the rest are generated based on them. If the size of baseDictionary is higher
   * than nMarkers, only the first nMarkers in baseDictionary are taken and no new marker is added.
   */
-CV_EXPORTS_AS(custom_dictionary_from) Ptr<Dictionary> generateCustomDictionary(
+CV_EXPORTS_AS(custom_dictionary_from) Ptr<ArucoDictionary> generateCustomDictionary(
         int nMarkers,
         int markerSize,
-        const Ptr<Dictionary> &baseDictionary,
+        const Ptr<ArucoDictionary> &baseDictionary,
         int randomSeed=0);
 
-
-
 //! @}
+
+namespace aruco {
+using Dictionary = ArucoDictionary;
+//using PREDEFINED_DICTIONARY_NAME = PREDEFINED_DICTIONARY_NAME;
+}
+
 }
 
 #endif

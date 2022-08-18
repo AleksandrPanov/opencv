@@ -106,8 +106,8 @@ static void _threshold(InputArray _in, OutputArray _out, int winSize, double con
   * @brief Given a tresholded image, find the contours, calculate their polygonal approximation
   * and take those that accomplish some conditions
   */
-static void _findMarkerContours(const Mat &in, vector< vector< Point2f > > &candidates,
-                                vector< vector< Point > > &contoursOut, double minPerimeterRate,
+static void _findMarkerContours(const Mat &in, vector<vector<Point2f> > &candidates,
+                                vector<vector<Point> > &contoursOut, double minPerimeterRate,
                                 double maxPerimeterRate, double accuracyRate,
                                 double minCornerDistanceRate, int minDistanceToBorder, int minSize) {
 
@@ -127,7 +127,7 @@ static void _findMarkerContours(const Mat &in, vector< vector< Point2f > > &cand
 
     Mat contoursImg;
     in.copyTo(contoursImg);
-    vector< vector< Point > > contours;
+    vector<vector<Point> > contours;
     findContours(contoursImg, contours, RETR_LIST, CHAIN_APPROX_NONE);
     // now filter list of contours
     for(unsigned int i = 0; i < contours.size(); i++) {
@@ -136,7 +136,7 @@ static void _findMarkerContours(const Mat &in, vector< vector< Point2f > > &cand
             continue;
 
         // check is square and is convex
-        vector< Point > approxCurve;
+        vector<Point> approxCurve;
         approxPolyDP(contours[i], approxCurve, double(contours[i].size()) * accuracyRate, true);
         if(approxCurve.size() != 4 || !isContourConvex(approxCurve)) continue;
 
@@ -164,7 +164,7 @@ static void _findMarkerContours(const Mat &in, vector< vector< Point2f > > &cand
         if(tooNearBorder) continue;
 
         // if it passes all the test, add to candidates vector
-        vector< Point2f > currentCandidate;
+        vector<Point2f> currentCandidate;
         currentCandidate.resize(4);
         for(int j = 0; j < 4; j++) {
             currentCandidate[j] = Point2f((float)approxCurve[j].x, (float)approxCurve[j].y);
@@ -178,7 +178,7 @@ static void _findMarkerContours(const Mat &in, vector< vector< Point2f > > &cand
 /**
   * @brief Assure order of candidate corners is clockwise direction
   */
-static void _reorderCandidatesCorners(vector< vector< Point2f > > &candidates) {
+static void _reorderCandidatesCorners(vector<vector<Point2f> > &candidates) {
 
     for(unsigned int i = 0; i < candidates.size(); i++) {
         double dx1 = candidates[i][1].x - candidates[i][0].x;
@@ -196,7 +196,7 @@ static void _reorderCandidatesCorners(vector< vector< Point2f > > &candidates) {
 /**
   * @brief to make sure that the corner's order of both candidates (default/white) is the same
   */
-static vector<Point2f> alignContourOrder(Point2f corner, vector< Point2f > candidate) {
+static vector<Point2f> alignContourOrder(Point2f corner, vector<Point2f> candidate) {
     uint8_t r=0;
     double min = cv::norm( Vec2f( corner - candidate[0] ), NORM_L2SQR);
     for(uint8_t pos=1; pos < 4; pos++) {
@@ -214,16 +214,16 @@ static vector<Point2f> alignContourOrder(Point2f corner, vector< Point2f > candi
   * @brief Check candidates that are too close to each other, save the potential candidates
   *        (i.e. biggest/smallest contour) and remove the rest
   */
-static void _filterTooCloseCandidates(const vector< vector< Point2f > > &candidatesIn,
-                                      vector< vector< vector< Point2f > > > &candidatesSetOut,
-                                      const vector< vector< Point > > &contoursIn,
-                                      vector< vector< vector< Point > > > &contoursSetOut,
+static void _filterTooCloseCandidates(const vector<vector<Point2f> > &candidatesIn,
+                                      vector<vector<vector<Point2f> > > &candidatesSetOut,
+                                      const vector<vector<Point> > &contoursIn,
+                                      vector<vector<vector<Point> > > &contoursSetOut,
                                       double minMarkerDistanceRate, bool detectInvertedMarker) {
 
     CV_Assert(minMarkerDistanceRate >= 0);
     vector<int> candGroup;
     candGroup.resize(candidatesIn.size(), -1);
-    vector< vector<unsigned int> > groupedCandidates;
+    vector<vector<unsigned int> > groupedCandidates;
     for(unsigned int i = 0; i < candidatesIn.size(); i++) {
         bool isSingleContour = true;
         for(unsigned int j = i + 1; j < candidatesIn.size(); j++) {
@@ -291,10 +291,10 @@ static void _filterTooCloseCandidates(const vector< vector< Point2f > > &candida
     candidatesSetOut.clear();
     contoursSetOut.clear();
 
-    vector< vector< Point2f > > biggerCandidates;
-    vector< vector< Point > > biggerContours;
-    vector< vector< Point2f > > smallerCandidates;
-    vector< vector< Point > > smallerContours;
+    vector<vector<Point2f> > biggerCandidates;
+    vector<vector<Point> > biggerContours;
+    vector<vector<Point2f> > smallerCandidates;
+    vector<vector<Point> > smallerContours;
 
     // save possible candidates
     for(unsigned int i = 0; i < groupedCandidates.size(); i++) {
@@ -341,8 +341,8 @@ static void _filterTooCloseCandidates(const vector< vector< Point2f > > &candida
 /**
  * @brief Initial steps on finding square candidates
  */
-static void _detectInitialCandidates(const Mat &grey, vector< vector< Point2f > > &candidates,
-                                     vector< vector< Point > > &contours,
+static void _detectInitialCandidates(const Mat &grey, vector<vector<Point2f> > &candidates,
+                                     vector<vector<Point> > &contours,
                                      const Ptr<DetectorParameters> &params) {
 
     CV_Assert(params->adaptiveThreshWinSizeMin >= 3 && params->adaptiveThreshWinSizeMax >= 3);
@@ -353,8 +353,8 @@ static void _detectInitialCandidates(const Mat &grey, vector< vector< Point2f > 
     int nScales =  (params->adaptiveThreshWinSizeMax - params->adaptiveThreshWinSizeMin) /
                       params->adaptiveThreshWinSizeStep + 1;
 
-    vector< vector< vector< Point2f > > > candidatesArrays((size_t) nScales);
-    vector< vector< vector< Point > > > contoursArrays((size_t) nScales);
+    vector<vector<vector<Point2f> > > candidatesArrays((size_t) nScales);
+    vector<vector<vector<Point> > > contoursArrays((size_t) nScales);
 
     ////for each value in the interval of thresholding window sizes
     parallel_for_(Range(0, nScales), [&](const Range& range) {
@@ -387,15 +387,15 @@ static void _detectInitialCandidates(const Mat &grey, vector< vector< Point2f > 
 /**
  * @brief Detect square candidates in the input image
  */
-static void _detectCandidates(InputArray _grayImage, vector< vector< vector< Point2f > > >& candidatesSetOut,
-                              vector< vector< vector< Point > > >& contoursSetOut, const Ptr<DetectorParameters> &_params) {
+static void _detectCandidates(InputArray _grayImage, vector<vector<vector<Point2f> > >& candidatesSetOut,
+                              vector<vector<vector<Point> > >& contoursSetOut, const Ptr<DetectorParameters> &_params) {
     Mat grey = _grayImage.getMat();
     CV_DbgAssert(grey.total() != 0);
     CV_DbgAssert(grey.type() == CV_8UC1);
 
     /// 1. DETECT FIRST SET OF CANDIDATES
-    vector< vector< Point2f > > candidates;
-    vector< vector< Point > > contours;
+    vector<vector<Point2f> > candidates;
+    vector<vector<Point> > contours;
     _detectInitialCandidates(grey, candidates, contours, _params);
     /// 2. SORT CORNERS
     _reorderCandidatesCorners(candidates);
@@ -425,11 +425,11 @@ static Mat _extractBits(InputArray _image, const vector<Point2f>& corners, int m
     Mat resultImg; // marker image after removing perspective
     int resultImgSize = markerSizeWithBorders * cellSize;
     Mat resultImgCorners(4, 1, CV_32FC2);
-    resultImgCorners.ptr< Point2f >(0)[0] = Point2f(0, 0);
-    resultImgCorners.ptr< Point2f >(0)[1] = Point2f((float)resultImgSize - 1, 0);
-    resultImgCorners.ptr< Point2f >(0)[2] =
+    resultImgCorners.ptr<Point2f>(0)[0] = Point2f(0, 0);
+    resultImgCorners.ptr<Point2f>(0)[1] = Point2f((float)resultImgSize - 1, 0);
+    resultImgCorners.ptr<Point2f>(0)[2] =
         Point2f((float)resultImgSize - 1, (float)resultImgSize - 1);
-    resultImgCorners.ptr< Point2f >(0)[3] = Point2f(0, (float)resultImgSize - 1);
+    resultImgCorners.ptr<Point2f>(0)[3] = Point2f(0, (float)resultImgSize - 1);
 
     // remove perspective
     Mat transformation = getPerspectiveTransform(corners, resultImgCorners);
@@ -446,9 +446,9 @@ static Mat _extractBits(InputArray _image, const vector<Point2f>& corners, int m
     Mat innerRegion = resultImg.colRange(cellSize / 2, resultImg.cols - cellSize / 2)
                           .rowRange(cellSize / 2, resultImg.rows - cellSize / 2);
     meanStdDev(innerRegion, mean, stddev);
-    if(stddev.ptr< double >(0)[0] < minStdDevOtsu) {
+    if(stddev.ptr<double>(0)[0] < minStdDevOtsu) {
         // all black or all white, depending on mean value
-        if(mean.ptr< double >(0)[0] > 127)
+        if(mean.ptr<double>(0)[0] > 127)
             bits.setTo(1);
         else
             bits.setTo(0);
@@ -508,10 +508,10 @@ static int _getBorderErrors(const Mat &bits, int markerSize, int borderSize) {
  *                           1 if the candidate is a black candidate (default candidate)
  *                           2 if the candidate is a white candidate
  */
-static uint8_t _identifyOneCandidate(const Ptr<Dictionary>& dictionary, InputArray _image,
-                                  const vector<Point2f>& _corners, int& idx,
-                                  const Ptr<DetectorParameters>& params, int& rotation,
-                                  const float scale = 1.f) {
+static uint8_t _identifyOneCandidate(const Ptr<ArucoDictionary>& dictionary, InputArray _image,
+                                     const vector<Point2f>& _corners, int& idx,
+                                     const Ptr<DetectorParameters>& params, int& rotation,
+                                     const float scale = 1.f) {
     CV_DbgAssert(_corners.size() == 4);
     CV_DbgAssert(_image.getMat().total() != 0);
     CV_DbgAssert(params->markerBorderBits > 0);
@@ -565,7 +565,7 @@ static uint8_t _identifyOneCandidate(const Ptr<Dictionary>& dictionary, InputArr
 /**
  * @brief rotate the initial corner to get to the right position
  */
-static void correctCornerPosition( vector< Point2f >& _candidate, int rotate){
+static void correctCornerPosition( vector<Point2f>& _candidate, int rotate){
     std::rotate(_candidate.begin(), _candidate.begin() + 4 - rotate, _candidate.end());
 }
 
@@ -597,29 +597,29 @@ static size_t _findOptPyrImageForCanonicalImg(
 
 static void _identifyCandidates(InputArray grey,
                                 const std::vector<cv::Mat>& image_pyr,
-                                vector< vector< vector< Point2f > > >& _candidatesSet,
-                                vector< vector< vector<Point> > >& _contoursSet, const Ptr<Dictionary> &_dictionary,
-                                vector< vector< Point2f > >& _accepted, vector< vector<Point> >& _contours, vector< int >& ids,
+                                vector<vector<vector<Point2f> > >& _candidatesSet,
+                                vector<vector<vector<Point> > >& _contoursSet, const Ptr<ArucoDictionary> &_dictionary,
+                                vector<vector<Point2f> >& _accepted, vector<vector<Point> >& _contours, vector<int>& ids,
                                 const Ptr<DetectorParameters> &params,
                                 OutputArrayOfArrays _rejected = noArray()) {
     CV_DbgAssert(grey.getMat().total() != 0);
     CV_DbgAssert(grey.getMat().type() == CV_8UC1);
     int ncandidates = (int)_candidatesSet[0].size();
-    vector< vector< Point2f > > accepted;
-    vector< vector< Point2f > > rejected;
-    vector< vector< Point > > contours;
+    vector<vector<Point2f> > accepted;
+    vector<vector<Point2f> > rejected;
+    vector<vector<Point> > contours;
 
-    vector< int > idsTmp(ncandidates, -1);
-    vector< int > rotated(ncandidates, 0);
-    vector< uint8_t > validCandidates(ncandidates, 0);
+    vector<int> idsTmp(ncandidates, -1);
+    vector<int> rotated(ncandidates, 0);
+    vector<uint8_t> validCandidates(ncandidates, 0);
 
     //// Analyze each of the candidates
     parallel_for_(Range(0, ncandidates), [&](const Range &range) {
         const int begin = range.start;
         const int end = range.end;
 
-        vector< vector< Point2f > >& candidates = params->detectInvertedMarker ? _candidatesSet[1] : _candidatesSet[0];
-        vector< vector< Point > >& contourS = params->detectInvertedMarker ? _contoursSet[1] : _contoursSet[0];
+        vector<vector<Point2f> >& candidates = params->detectInvertedMarker ? _candidatesSet[1] : _candidatesSet[0];
+        vector<vector<Point> >& contourS = params->detectInvertedMarker ? _contoursSet[1] : _contoursSet[0];
 
         for(int i = begin; i < end; i++) {
             int currId = -1;
@@ -870,12 +870,12 @@ void ArucoDetector::detectMarkers(InputArray _image, OutputArrayOfArrays _corner
         cv::resize(grey, grey, cv::Size(cvRound(fxfy * grey.cols), cvRound(fxfy * grey.rows)));
 
     /// STEP 2: Detect marker candidates
-    vector< vector< Point2f > > candidates;
-    vector< vector< Point > > contours;
-    vector< int > ids;
+    vector<vector<Point2f> > candidates;
+    vector<vector<Point> > contours;
+    vector<int> ids;
 
-    vector< vector< vector< Point2f > > > candidatesSet;
-    vector< vector< vector< Point > > > contoursSet;
+    vector<vector<vector<Point2f> > > candidatesSet;
+    vector<vector<vector<Point> > > contoursSet;
 
     /// STEP 2.a Detect marker candidates :: using AprilTag
     if(params->cornerRefinementMethod == CORNER_REFINE_APRILTAG){
@@ -949,7 +949,7 @@ void ArucoDetector::detectMarkers(InputArray _image, OutputArrayOfArrays _corner
 /**
   * Project board markers that are not included in the list of detected markers
   */
-static void _projectUndetectedMarkers(const Ptr<Board> &_board, InputOutputArrayOfArrays _detectedCorners,
+static void _projectUndetectedMarkers(const Ptr<BaseArucoBoard> &_board, InputOutputArrayOfArrays _detectedCorners,
                                InputOutputArray _detectedIds, InputArray _cameraMatrix, InputArray _distCoeffs,
                                vector<vector<Point2f> >& _undetectedMarkersProjectedCorners,
                                OutputArray _undetectedMarkersIds) {
@@ -968,7 +968,7 @@ static void _projectUndetectedMarkers(const Ptr<Board> &_board, InputOutputArray
     for(unsigned int i = 0; i < _board->getIds().size(); i++) {
         int foundIdx = -1;
         for(unsigned int j = 0; j < _detectedIds.total(); j++) {
-            if(_board->getIds()[i] == _detectedIds.getMat().ptr< int >()[j]) {
+            if(_board->getIds()[i] == _detectedIds.getMat().ptr<int>()[j]) {
                 foundIdx = j;
                 break;
             }
@@ -991,7 +991,7 @@ static void _projectUndetectedMarkers(const Ptr<Board> &_board, InputOutputArray
   * Interpolate board markers that are not included in the list of detected markers using
   * global homography
   */
-static void _projectUndetectedMarkers(const Ptr<Board> &_board, InputOutputArrayOfArrays _detectedCorners,
+static void _projectUndetectedMarkers(const Ptr<BaseArucoBoard> &_board, InputOutputArrayOfArrays _detectedCorners,
                                InputOutputArray _detectedIds,
                                vector<vector<Point2f > >& _undetectedMarkersProjectedCorners,
                                OutputArray _undetectedMarkersIds) {
@@ -1014,9 +1014,9 @@ static void _projectUndetectedMarkers(const Ptr<Board> &_board, InputOutputArray
     for(unsigned int j = 0; j < _board->getIds().size(); j++) {
         bool found = false;
         for(unsigned int i = 0; i < _detectedIds.total(); i++) {
-            if(_detectedIds.getMat().ptr< int >()[i] == _board->getIds()[j]) {
+            if(_detectedIds.getMat().ptr<int>()[i] == _board->getIds()[j]) {
                 for(int c = 0; c < 4; c++) {
-                    imageCornersAll.push_back(_detectedCorners.getMat(i).ptr< Point2f >()[c]);
+                    imageCornersAll.push_back(_detectedCorners.getMat(i).ptr<Point2f>()[c]);
                     detectedMarkersObj2DAll.push_back(
                         Point2f(_board->getObjPoints()[j][c].x, _board->getObjPoints()[j][c].y));
                 }
@@ -1048,7 +1048,7 @@ static void _projectUndetectedMarkers(const Ptr<Board> &_board, InputOutputArray
 }
 
 
-void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<Board> &_board,
+void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<BaseArucoBoard> &_board,
                            InputOutputArrayOfArrays _detectedCorners, InputOutputArray _detectedIds,
                            InputOutputArrayOfArrays _rejectedCorners, InputArray _cameraMatrix,
                            InputArray _distCoeffs, OutputArray _recoveredIdxs) {
@@ -1057,8 +1057,8 @@ void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<Board> &_
     if(_detectedIds.total() == 0 || _rejectedCorners.total() == 0) return;
 
     // get projections of missing markers in the board
-    vector< vector< Point2f > > undetectedMarkersCorners;
-    vector< int > undetectedMarkersIds;
+    vector<vector<Point2f> > undetectedMarkersCorners;
+    vector<int> undetectedMarkersIds;
     if(_cameraMatrix.total() != 0) {
         // reproject based on camera projection model
         _projectUndetectedMarkers(_board, _detectedCorners, _detectedIds, _cameraMatrix, _distCoeffs,
@@ -1071,7 +1071,7 @@ void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<Board> &_
     }
 
     // list of missing markers indicating if they have been assigned to a candidate
-    vector< bool > alreadyIdentified(_rejectedCorners.total(), false);
+    vector<bool > alreadyIdentified(_rejectedCorners.total(), false);
 
     // maximum bits that can be corrected
     int maxCorrectionRecalculated =
@@ -1082,15 +1082,15 @@ void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<Board> &_
 
     // vector of final detected marker corners and ids
     vector<vector<Point2f> > finalAcceptedCorners;
-    vector< int > finalAcceptedIds;
+    vector<int> finalAcceptedIds;
     // fill with the current markers
     finalAcceptedCorners.resize(_detectedCorners.total());
     finalAcceptedIds.resize(_detectedIds.total());
     for(unsigned int i = 0; i < _detectedIds.total(); i++) {
         finalAcceptedCorners[i] = _detectedCorners.getMat(i).clone();
-        finalAcceptedIds[i] = _detectedIds.getMat().ptr< int >()[i];
+        finalAcceptedIds[i] = _detectedIds.getMat().ptr<int>()[i];
     }
-    vector< int > recoveredIdxs; // original indexes of accepted markers in _rejectedCorners
+    vector<int> recoveredIdxs; // original indexes of accepted markers in _rejectedCorners
 
     // for each missing marker, try to find a correspondence
     for(unsigned int i = 0; i < undetectedMarkersIds.size(); i++) {
@@ -1110,7 +1110,7 @@ void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<Board> &_
             for(int c = 0; c < 4; c++) { // first corner in rejected candidate
                 double currentMaxDistance = 0;
                 for(int k = 0; k < 4; k++) {
-                    Point2f rejCorner = _rejectedCorners.getMat(j).ptr< Point2f >()[(c + k) % 4];
+                    Point2f rejCorner = _rejectedCorners.getMat(j).ptr<Point2f>()[(c + k) % 4];
                     Point2f distVector = undetectedMarkersCorners[i][k] - rejCorner;
                     double cornerDist = distVector.x * distVector.x + distVector.y * distVector.y;
                     currentMaxDistance = max(currentMaxDistance, cornerDist);
@@ -1131,8 +1131,8 @@ void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<Board> &_
             if(refineParams->checkAllOrders) {
                 rotatedMarker = Mat(4, 1, CV_32FC2);
                 for(int c = 0; c < 4; c++)
-                    rotatedMarker.ptr< Point2f >()[c] =
-                        _rejectedCorners.getMat(j).ptr< Point2f >()[(c + 4 + validRot) % 4];
+                    rotatedMarker.ptr<Point2f>()[c] =
+                        _rejectedCorners.getMat(j).ptr<Point2f>()[(c + 4 + validRot) % 4];
             }
             else rotatedMarker = _rejectedCorners.getMat(j);
 
@@ -1232,28 +1232,28 @@ void drawDetectedMarkers(InputOutputArray _image, InputArrayOfArrays _corners,
         // draw marker sides
         for(int j = 0; j < 4; j++) {
             Point2f p0, p1;
-            p0 = currentMarker.ptr< Point2f >(0)[j];
-            p1 = currentMarker.ptr< Point2f >(0)[(j + 1) % 4];
+            p0 = currentMarker.ptr<Point2f>(0)[j];
+            p1 = currentMarker.ptr<Point2f>(0)[(j + 1) % 4];
             line(_image, p0, p1, borderColor, 1);
         }
         // draw first corner mark
-        rectangle(_image, currentMarker.ptr< Point2f >(0)[0] - Point2f(3, 3),
-                  currentMarker.ptr< Point2f >(0)[0] + Point2f(3, 3), cornerColor, 1, LINE_AA);
+        rectangle(_image, currentMarker.ptr<Point2f>(0)[0] - Point2f(3, 3),
+                  currentMarker.ptr<Point2f>(0)[0] + Point2f(3, 3), cornerColor, 1, LINE_AA);
 
         // draw ID
         if(_ids.total() != 0) {
             Point2f cent(0, 0);
             for(int p = 0; p < 4; p++)
-                cent += currentMarker.ptr< Point2f >(0)[p];
+                cent += currentMarker.ptr<Point2f>(0)[p];
             cent = cent / 4.;
             stringstream s;
-            s << "id=" << _ids.getMat().ptr< int >(0)[i];
+            s << "id=" << _ids.getMat().ptr<int>(0)[i];
             putText(_image, s.str(), cent, FONT_HERSHEY_SIMPLEX, 0.5, textColor, 2);
         }
     }
 }
 
-void drawMarker(const Ptr<Dictionary> &dictionary, int id, int sidePixels, OutputArray _img, int borderBits) {
+void drawMarker(const Ptr<ArucoDictionary> &dictionary, int id, int sidePixels, OutputArray _img, int borderBits) {
     dictionary->drawMarker(id, sidePixels, _img, borderBits);
 }
 

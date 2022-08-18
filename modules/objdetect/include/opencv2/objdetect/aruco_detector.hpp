@@ -289,7 +289,7 @@ class CV_EXPORTS_W ArucoDetector : public Algorithm
 {
 public:
     /// dictionary indicates the type of markers that will be searched
-    CV_PROP_RW Ptr<Dictionary> dictionary;
+    CV_PROP_RW Ptr<ArucoDictionary> dictionary;
 
     /// marker detection parameters, check DetectorParameters docs to see available settings
     CV_PROP_RW Ptr<DetectorParameters> params;
@@ -303,12 +303,12 @@ public:
      * @param _params marker detection parameters
      * @param _refineParams marker refine detection parameters
      */
-    CV_WRAP ArucoDetector(const Ptr<Dictionary> &_dictionary = getPredefinedDictionary(DICT_4X4_50),
+    CV_WRAP ArucoDetector(const Ptr<ArucoDictionary> &_dictionary = getPredefinedDictionary(DICT_4X4_50),
                   const Ptr<DetectorParameters> &_params = DetectorParameters::create(),
                   const Ptr<RefineParameters> &_refineParams = RefineParameters::create()):
                   dictionary(_dictionary), params(_params), refineParams(_refineParams) {}
 
-    CV_WRAP static Ptr<ArucoDetector> create(const Ptr<Dictionary> &_dictionary, const Ptr<DetectorParameters> &_params) {
+    CV_WRAP static Ptr<ArucoDetector> create(const Ptr<ArucoDictionary> &_dictionary, const Ptr<DetectorParameters> &_params) {
         return makePtr<ArucoDetector>(_dictionary, _params);
     }
 
@@ -360,7 +360,7 @@ public:
      * using projectPoint function. If not, missing marker projections are interpolated using global
      * homography, and all the marker corners in the board must have the same Z coordinate.
      */
-    CV_WRAP void refineDetectedMarkers(InputArray image, const Ptr<Board> &board,
+    CV_WRAP void refineDetectedMarkers(InputArray image, const Ptr<BaseArucoBoard> &board,
                                        InputOutputArrayOfArrays detectedCorners,
                                        InputOutputArray detectedIds, InputOutputArrayOfArrays rejectedCorners,
                                        InputArray cameraMatrix = noArray(), InputArray distCoeffs = noArray(),
@@ -425,7 +425,7 @@ CV_EXPORTS_W void drawDetectedMarkers(InputOutputArray image, InputArrayOfArrays
  *
  * This function returns a marker image in its canonical form (i.e. ready to be printed)
  */
-CV_EXPORTS_W void drawMarker(const Ptr<Dictionary> &dictionary, int id, int sidePixels, OutputArray img,
+CV_EXPORTS_W void drawMarker(const Ptr<ArucoDictionary> &dictionary, int id, int sidePixels, OutputArray img,
                              int borderBits = 1);
 
 //! @}

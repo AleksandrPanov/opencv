@@ -15,33 +15,33 @@ namespace cv {
 using namespace std;
 
 
-Dictionary::Dictionary(const Ptr<Dictionary> &_dictionary) {
+ArucoDictionary::ArucoDictionary(const Ptr<ArucoDictionary> &_dictionary) {
     markerSize = _dictionary->markerSize;
     maxCorrectionBits = _dictionary->maxCorrectionBits;
     bytesList = _dictionary->bytesList.clone();
 }
 
 
-Dictionary::Dictionary(const Mat &_bytesList, int _markerSize, int _maxcorr) {
+ArucoDictionary::ArucoDictionary(const Mat &_bytesList, int _markerSize, int _maxcorr) {
     markerSize = _markerSize;
     maxCorrectionBits = _maxcorr;
     bytesList = _bytesList;
 }
 
 
-Ptr<Dictionary> Dictionary::create(int nMarkers, int markerSize, int randomSeed) {
-    const Ptr<Dictionary> baseDictionary = makePtr<Dictionary>();
+Ptr<ArucoDictionary> ArucoDictionary::create(int nMarkers, int markerSize, int randomSeed) {
+    const Ptr<ArucoDictionary> baseDictionary = makePtr<ArucoDictionary>();
     return create(nMarkers, markerSize, baseDictionary, randomSeed);
 }
 
 
-Ptr<Dictionary> Dictionary::create(int nMarkers, int markerSize,
-                                   const Ptr<Dictionary> &baseDictionary, int randomSeed) {
+Ptr<ArucoDictionary> ArucoDictionary::create(int nMarkers, int markerSize,
+                                   const Ptr<ArucoDictionary> &baseDictionary, int randomSeed) {
     return generateCustomDictionary(nMarkers, markerSize, baseDictionary, randomSeed);
 }
 
 
-bool Dictionary::readDictionary(const cv::FileNode& fn) {
+bool ArucoDictionary::readDictionary(const cv::FileNode& fn) {
     int nMarkers = 0, _markerSize = 0;
     if (fn.empty() || !readParameter("nmarkers", nMarkers, fn) || !readParameter("markersize", _markerSize, fn))
         return false;
@@ -54,16 +54,16 @@ bool Dictionary::readDictionary(const cv::FileNode& fn) {
             return false;
         for (int j = 0; j < (int) markerString.size(); j++)
             marker.at<unsigned char>(j) = (markerString[j] == '0') ? 0 : 1;
-        bytes.push_back(Dictionary::getByteListFromBits(marker));
+        bytes.push_back(ArucoDictionary::getByteListFromBits(marker));
     }
     int _maxCorrectionBits = 0;
     readParameter("maxCorrectionBits", _maxCorrectionBits, fn);
-    *this = Dictionary(bytes, _markerSize, _maxCorrectionBits);
+    *this = ArucoDictionary(bytes, _markerSize, _maxCorrectionBits);
     return true;
 }
 
 
-void Dictionary::writeDictionary(Ptr<FileStorage>& fs) {
+void ArucoDictionary::writeDictionary(Ptr<FileStorage>& fs) {
     *fs << "nmarkers" << bytesList.rows;
     *fs << "markersize" << markerSize;
     *fs << "maxCorrectionBits" << maxCorrectionBits;
@@ -81,12 +81,12 @@ void Dictionary::writeDictionary(Ptr<FileStorage>& fs) {
 }
 
 
-Ptr<Dictionary> Dictionary::get(int dict) {
+Ptr<ArucoDictionary> ArucoDictionary::get(int dict) {
     return getPredefinedDictionary(dict);
 }
 
 
-bool Dictionary::identify(const Mat &onlyBits, int &idx, int &rotation, double maxCorrectionRate) const {
+bool ArucoDictionary::identify(const Mat &onlyBits, int &idx, int &rotation, double maxCorrectionRate) const {
     CV_Assert(onlyBits.rows == markerSize && onlyBits.cols == markerSize);
 
     int maxCorrectionRecalculed = int(double(maxCorrectionBits) * maxCorrectionRate);
@@ -124,7 +124,7 @@ bool Dictionary::identify(const Mat &onlyBits, int &idx, int &rotation, double m
 }
 
 
-int Dictionary::getDistanceToId(InputArray bits, int id, bool allRotations) const {
+int ArucoDictionary::getDistanceToId(InputArray bits, int id, bool allRotations) const {
 
     CV_Assert(id >= 0 && id < bytesList.rows);
 
@@ -147,7 +147,7 @@ int Dictionary::getDistanceToId(InputArray bits, int id, bool allRotations) cons
 }
 
 
-void Dictionary::drawMarker(int id, int sidePixels, OutputArray _img, int borderBits) const {
+void ArucoDictionary::drawMarker(int id, int sidePixels, OutputArray _img, int borderBits) const {
     CV_Assert(sidePixels >= (markerSize + 2*borderBits));
     CV_Assert(id < bytesList.rows);
     CV_Assert(borderBits > 0);
@@ -169,7 +169,7 @@ void Dictionary::drawMarker(int id, int sidePixels, OutputArray _img, int border
 }
 
 
-Mat Dictionary::getByteListFromBits(const Mat &bits) {
+Mat ArucoDictionary::getByteListFromBits(const Mat &bits) {
     // integer ceil
     int nbytes = (bits.cols * bits.rows + 8 - 1) / 8;
 
@@ -207,7 +207,7 @@ Mat Dictionary::getByteListFromBits(const Mat &bits) {
 }
 
 
-Mat Dictionary::getBitsFromByteList(const Mat &byteList, int markerSize) {
+Mat ArucoDictionary::getBitsFromByteList(const Mat &byteList, int markerSize) {
     CV_Assert(byteList.total() > 0 &&
               byteList.total() >= (unsigned int)markerSize * markerSize / 8 &&
               byteList.total() <= (unsigned int)markerSize * markerSize / 8 + 1);
@@ -241,92 +241,92 @@ Mat Dictionary::getBitsFromByteList(const Mat &byteList, int markerSize) {
 }
 
 
-Ptr<Dictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name) {
+Ptr<ArucoDictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name) {
     // DictionaryData constructors calls
     //    moved out of globals so construted on first use, which allows lazy-loading of opencv dll
-    static const Dictionary DICT_ARUCO_DATA = Dictionary(Mat(1024, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_ARUCO_BYTES), 5, 0);
+    static const ArucoDictionary DICT_ARUCO_DATA = ArucoDictionary(Mat(1024, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_ARUCO_BYTES), 5, 0);
 
-    static const Dictionary DICT_4X4_50_DATA = Dictionary(Mat(50, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 1);
-    static const Dictionary DICT_4X4_100_DATA = Dictionary(Mat(100, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 1);
-    static const Dictionary DICT_4X4_250_DATA = Dictionary(Mat(250, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 1);
-    static const Dictionary DICT_4X4_1000_DATA = Dictionary(Mat(1000, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 0);
+    static const ArucoDictionary DICT_4X4_50_DATA = ArucoDictionary(Mat(50, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 1);
+    static const ArucoDictionary DICT_4X4_100_DATA = ArucoDictionary(Mat(100, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 1);
+    static const ArucoDictionary DICT_4X4_250_DATA = ArucoDictionary(Mat(250, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 1);
+    static const ArucoDictionary DICT_4X4_1000_DATA = ArucoDictionary(Mat(1000, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_4X4_1000_BYTES), 4, 0);
 
-    static const Dictionary DICT_5X5_50_DATA = Dictionary(Mat(50, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 3);
-    static const Dictionary DICT_5X5_100_DATA = Dictionary(Mat(100, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 3);
-    static const Dictionary DICT_5X5_250_DATA = Dictionary(Mat(250, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 2);
-    static const Dictionary DICT_5X5_1000_DATA = Dictionary(Mat(1000, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 2);
+    static const ArucoDictionary DICT_5X5_50_DATA = ArucoDictionary(Mat(50, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 3);
+    static const ArucoDictionary DICT_5X5_100_DATA = ArucoDictionary(Mat(100, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 3);
+    static const ArucoDictionary DICT_5X5_250_DATA = ArucoDictionary(Mat(250, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 2);
+    static const ArucoDictionary DICT_5X5_1000_DATA = ArucoDictionary(Mat(1000, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_5X5_1000_BYTES), 5, 2);
 
-    static const Dictionary DICT_6X6_50_DATA = Dictionary(Mat(50, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 6);
-    static const Dictionary DICT_6X6_100_DATA = Dictionary(Mat(100, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 5);
-    static const Dictionary DICT_6X6_250_DATA = Dictionary(Mat(250, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 5);
-    static const Dictionary DICT_6X6_1000_DATA = Dictionary(Mat(1000, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 4);
+    static const ArucoDictionary DICT_6X6_50_DATA = ArucoDictionary(Mat(50, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 6);
+    static const ArucoDictionary DICT_6X6_100_DATA = ArucoDictionary(Mat(100, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 5);
+    static const ArucoDictionary DICT_6X6_250_DATA = ArucoDictionary(Mat(250, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 5);
+    static const ArucoDictionary DICT_6X6_1000_DATA = ArucoDictionary(Mat(1000, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_6X6_1000_BYTES), 6, 4);
 
-    static const Dictionary DICT_7X7_50_DATA = Dictionary(Mat(50, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 9);
-    static const Dictionary DICT_7X7_100_DATA = Dictionary(Mat(100, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 8);
-    static const Dictionary DICT_7X7_250_DATA = Dictionary(Mat(250, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 8);
-    static const Dictionary DICT_7X7_1000_DATA = Dictionary(Mat(1000, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 6);
+    static const ArucoDictionary DICT_7X7_50_DATA = ArucoDictionary(Mat(50, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 9);
+    static const ArucoDictionary DICT_7X7_100_DATA = ArucoDictionary(Mat(100, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 8);
+    static const ArucoDictionary DICT_7X7_250_DATA = ArucoDictionary(Mat(250, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 8);
+    static const ArucoDictionary DICT_7X7_1000_DATA = ArucoDictionary(Mat(1000, (7 * 7 + 7) / 8, CV_8UC4, (uchar*)DICT_7X7_1000_BYTES), 7, 6);
 
-    static const Dictionary DICT_APRILTAG_16h5_DATA = Dictionary(Mat(30, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_16h5_BYTES), 4, 0);
-    static const Dictionary DICT_APRILTAG_25h9_DATA = Dictionary(Mat(35, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_25h9_BYTES), 5, 0);
-    static const Dictionary DICT_APRILTAG_36h10_DATA = Dictionary(Mat(2320, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_36h10_BYTES), 6, 0);
-    static const Dictionary DICT_APRILTAG_36h11_DATA = Dictionary(Mat(587, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_36h11_BYTES), 6, 0);
+    static const ArucoDictionary DICT_APRILTAG_16h5_DATA = ArucoDictionary(Mat(30, (4 * 4 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_16h5_BYTES), 4, 0);
+    static const ArucoDictionary DICT_APRILTAG_25h9_DATA = ArucoDictionary(Mat(35, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_25h9_BYTES), 5, 0);
+    static const ArucoDictionary DICT_APRILTAG_36h10_DATA = ArucoDictionary(Mat(2320, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_36h10_BYTES), 6, 0);
+    static const ArucoDictionary DICT_APRILTAG_36h11_DATA = ArucoDictionary(Mat(587, (6 * 6 + 7) / 8, CV_8UC4, (uchar*)DICT_APRILTAG_36h11_BYTES), 6, 0);
 
     switch(name) {
 
     case DICT_ARUCO_ORIGINAL:
-        return makePtr<Dictionary>(DICT_ARUCO_DATA);
+        return makePtr<ArucoDictionary>(DICT_ARUCO_DATA);
 
     case DICT_4X4_50:
-        return makePtr<Dictionary>(DICT_4X4_50_DATA);
+        return makePtr<ArucoDictionary>(DICT_4X4_50_DATA);
     case DICT_4X4_100:
-        return makePtr<Dictionary>(DICT_4X4_100_DATA);
+        return makePtr<ArucoDictionary>(DICT_4X4_100_DATA);
     case DICT_4X4_250:
-        return makePtr<Dictionary>(DICT_4X4_250_DATA);
+        return makePtr<ArucoDictionary>(DICT_4X4_250_DATA);
     case DICT_4X4_1000:
-        return makePtr<Dictionary>(DICT_4X4_1000_DATA);
+        return makePtr<ArucoDictionary>(DICT_4X4_1000_DATA);
 
     case DICT_5X5_50:
-        return makePtr<Dictionary>(DICT_5X5_50_DATA);
+        return makePtr<ArucoDictionary>(DICT_5X5_50_DATA);
     case DICT_5X5_100:
-        return makePtr<Dictionary>(DICT_5X5_100_DATA);
+        return makePtr<ArucoDictionary>(DICT_5X5_100_DATA);
     case DICT_5X5_250:
-        return makePtr<Dictionary>(DICT_5X5_250_DATA);
+        return makePtr<ArucoDictionary>(DICT_5X5_250_DATA);
     case DICT_5X5_1000:
-        return makePtr<Dictionary>(DICT_5X5_1000_DATA);
+        return makePtr<ArucoDictionary>(DICT_5X5_1000_DATA);
 
     case DICT_6X6_50:
-        return makePtr<Dictionary>(DICT_6X6_50_DATA);
+        return makePtr<ArucoDictionary>(DICT_6X6_50_DATA);
     case DICT_6X6_100:
-        return makePtr<Dictionary>(DICT_6X6_100_DATA);
+        return makePtr<ArucoDictionary>(DICT_6X6_100_DATA);
     case DICT_6X6_250:
-        return makePtr<Dictionary>(DICT_6X6_250_DATA);
+        return makePtr<ArucoDictionary>(DICT_6X6_250_DATA);
     case DICT_6X6_1000:
-        return makePtr<Dictionary>(DICT_6X6_1000_DATA);
+        return makePtr<ArucoDictionary>(DICT_6X6_1000_DATA);
 
     case DICT_7X7_50:
-        return makePtr<Dictionary>(DICT_7X7_50_DATA);
+        return makePtr<ArucoDictionary>(DICT_7X7_50_DATA);
     case DICT_7X7_100:
-        return makePtr<Dictionary>(DICT_7X7_100_DATA);
+        return makePtr<ArucoDictionary>(DICT_7X7_100_DATA);
     case DICT_7X7_250:
-        return makePtr<Dictionary>(DICT_7X7_250_DATA);
+        return makePtr<ArucoDictionary>(DICT_7X7_250_DATA);
     case DICT_7X7_1000:
-        return makePtr<Dictionary>(DICT_7X7_1000_DATA);
+        return makePtr<ArucoDictionary>(DICT_7X7_1000_DATA);
 
     case DICT_APRILTAG_16h5:
-        return makePtr<Dictionary>(DICT_APRILTAG_16h5_DATA);
+        return makePtr<ArucoDictionary>(DICT_APRILTAG_16h5_DATA);
     case DICT_APRILTAG_25h9:
-        return makePtr<Dictionary>(DICT_APRILTAG_25h9_DATA);
+        return makePtr<ArucoDictionary>(DICT_APRILTAG_25h9_DATA);
     case DICT_APRILTAG_36h10:
-        return makePtr<Dictionary>(DICT_APRILTAG_36h10_DATA);
+        return makePtr<ArucoDictionary>(DICT_APRILTAG_36h10_DATA);
     case DICT_APRILTAG_36h11:
-        return makePtr<Dictionary>(DICT_APRILTAG_36h11_DATA);
+        return makePtr<ArucoDictionary>(DICT_APRILTAG_36h11_DATA);
 
     }
-    return makePtr<Dictionary>(DICT_4X4_50_DATA);
+    return makePtr<ArucoDictionary>(DICT_4X4_50_DATA);
 }
 
 
-Ptr<Dictionary> getPredefinedDictionary(int dict) {
+Ptr<ArucoDictionary> getPredefinedDictionary(int dict) {
     return getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME(dict));
 }
 
@@ -353,7 +353,7 @@ static Mat _generateRandomMarker(int markerSize, RNG &rng) {
  * Pattern Recogn. 47, 6 (June 2014), 2280-2292. DOI=10.1016/j.patcog.2014.01.005
  */
 static int _getSelfDistance(const Mat &marker) {
-    Mat bytes = Dictionary::getByteListFromBits(marker);
+    Mat bytes = ArucoDictionary::getByteListFromBits(marker);
     int minHamming = (int)marker.total() + 1;
     for(int r = 1; r < 4; r++) {
         int currentHamming = cv::hal::normHamming(bytes.ptr(), bytes.ptr() + bytes.cols*r, bytes.cols);
@@ -363,11 +363,11 @@ static int _getSelfDistance(const Mat &marker) {
 }
 
 
-Ptr<Dictionary> generateCustomDictionary(int nMarkers, int markerSize,
-                                         const Ptr<Dictionary> &baseDictionary, int randomSeed) {
+Ptr<ArucoDictionary> generateCustomDictionary(int nMarkers, int markerSize,
+                                         const Ptr<ArucoDictionary> &baseDictionary, int randomSeed) {
     RNG rng((uint64)(randomSeed));
 
-    Ptr<Dictionary> out = makePtr<Dictionary>();
+    Ptr<ArucoDictionary> out = makePtr<ArucoDictionary>();
     out->markerSize = markerSize;
 
     // theoretical maximum intermarker distance
@@ -385,7 +385,7 @@ Ptr<Dictionary> generateCustomDictionary(int nMarkers, int markerSize,
         int minDistance = markerSize * markerSize + 1;
         for(int i = 0; i < out->bytesList.rows; i++) {
             Mat markerBytes = out->bytesList.rowRange(i, i + 1);
-            Mat markerBits = Dictionary::getBitsFromByteList(markerBytes, markerSize);
+            Mat markerBits = ArucoDictionary::getBitsFromByteList(markerBytes, markerSize);
             minDistance = min(minDistance, _getSelfDistance(markerBits));
             for(int j = i + 1; j < out->bytesList.rows; j++) {
                 minDistance = min(minDistance, out->getDistanceToId(markerBits, j));
@@ -424,7 +424,7 @@ Ptr<Dictionary> generateCustomDictionary(int nMarkers, int markerSize,
         if(minDistance >= tau) {
             unproductiveIterations = 0;
             bestTau = 0;
-            Mat bytes = Dictionary::getByteListFromBits(currentMarker);
+            Mat bytes = ArucoDictionary::getByteListFromBits(currentMarker);
             out->bytesList.push_back(bytes);
         } else {
             unproductiveIterations++;
@@ -440,7 +440,7 @@ Ptr<Dictionary> generateCustomDictionary(int nMarkers, int markerSize,
                 unproductiveIterations = 0;
                 tau = bestTau;
                 bestTau = 0;
-                Mat bytes = Dictionary::getByteListFromBits(bestMarker);
+                Mat bytes = ArucoDictionary::getByteListFromBits(bestMarker);
                 out->bytesList.push_back(bytes);
             }
         }
@@ -453,8 +453,8 @@ Ptr<Dictionary> generateCustomDictionary(int nMarkers, int markerSize,
 }
 
 
-Ptr<Dictionary> generateCustomDictionary(int nMarkers, int markerSize, int randomSeed) {
-    Ptr<Dictionary> baseDictionary = makePtr<Dictionary>();
+Ptr<ArucoDictionary> generateCustomDictionary(int nMarkers, int markerSize, int randomSeed) {
+    Ptr<ArucoDictionary> baseDictionary = makePtr<ArucoDictionary>();
     return generateCustomDictionary(nMarkers, markerSize, baseDictionary, randomSeed);
 }
 
