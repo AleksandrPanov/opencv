@@ -92,9 +92,8 @@ static void _drawPlanarBoardImpl(BaseArucoBoard *_board, Size outSize, OutputArr
     }
 }
 
-void drawPlanarBoard(const Ptr<BaseArucoBoard> &_board, Size outSize, OutputArray _img, int marginSize,
-                     int borderBits) {
-    _drawPlanarBoardImpl(_board, outSize, _img, marginSize, borderBits);
+void BaseArucoBoard::draw(Size outSize, OutputArray _img, int marginSize, int borderBits) {
+    _drawPlanarBoardImpl(this, outSize, _img, marginSize, borderBits);
 }
 
 struct GridArucoBoard::GridImpl {
@@ -111,7 +110,8 @@ struct GridArucoBoard::GridImpl {
 
 GridArucoBoard::GridArucoBoard(): gridImpl(makePtr<GridImpl>()) {}
 
-BaseArucoBoard::BaseArucoBoard(): dictionary(makePtr<ArucoDictionary>(getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME::DICT_4X4_50))) {}
+BaseArucoBoard::BaseArucoBoard(): dictionary(makePtr<ArucoDictionary>(ArucoDictionary::getPredefinedDictionary(
+                                             PREDEFINED_DICTIONARY_NAME::DICT_4X4_50))) {}
 
 Ptr<BaseArucoBoard> BaseArucoBoard::create(InputArrayOfArrays objPoints, const Ptr<ArucoDictionary> &dictionary, InputArray ids) {
     CV_Assert(objPoints.total() == ids.total());
@@ -422,19 +422,19 @@ float ChArucoBoard::getSquareLength() const { return charucoImpl->squareLength; 
 
 float ChArucoBoard::getMarkerLength() const { return charucoImpl->markerLength; }
 
-bool testCharucoCornersCollinear(const Ptr<ChArucoBoard> &_board, InputArray _charucoIds) {
+bool ChArucoBoard::testCharucoCornersCollinear(InputArray _charucoIds) {
     unsigned int nCharucoCorners = (unsigned int)_charucoIds.getMat().total();
     if (nCharucoCorners <= 2)
         return true;
 
     // only test if there are 3 or more corners
-    CV_Assert( _board->chessboardCorners.size() >= _charucoIds.getMat().total());
+    CV_Assert(this->chessboardCorners.size() >= _charucoIds.getMat().total());
 
-    Vec<double, 3> point0( _board->chessboardCorners[_charucoIds.getMat().at< int >(0)].x,
-            _board->chessboardCorners[_charucoIds.getMat().at< int >(0)].y, 1);
+    Vec<double, 3> point0(this->chessboardCorners[_charucoIds.getMat().at< int >(0)].x,
+            this->chessboardCorners[_charucoIds.getMat().at< int >(0)].y, 1);
 
-    Vec<double, 3> point1( _board->chessboardCorners[_charucoIds.getMat().at< int >(1)].x,
-            _board->chessboardCorners[_charucoIds.getMat().at< int >(1)].y, 1);
+    Vec<double, 3> point1(this->chessboardCorners[_charucoIds.getMat().at< int >(1)].x,
+            this->chessboardCorners[_charucoIds.getMat().at< int >(1)].y, 1);
 
     // create a line from the first two points.
     Vec<double, 3> testLine = point0.cross(point1);
@@ -448,8 +448,8 @@ bool testCharucoCornersCollinear(const Ptr<ChArucoBoard> &_board, InputArray _ch
 
     double dotProduct;
     for (unsigned int i = 2; i < nCharucoCorners; i++){
-        testPoint(0) = _board->chessboardCorners[_charucoIds.getMat().at< int >(i)].x;
-        testPoint(1) = _board->chessboardCorners[_charucoIds.getMat().at< int >(i)].y;
+        testPoint(0) = this->chessboardCorners[_charucoIds.getMat().at< int >(i)].x;
+        testPoint(1) = this->chessboardCorners[_charucoIds.getMat().at< int >(i)].y;
 
         // if testPoint is on testLine, dotProduct will be zero (or very, very close)
         dotProduct = testPoint.dot(testLine);

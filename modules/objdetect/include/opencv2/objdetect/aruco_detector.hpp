@@ -43,7 +43,7 @@ namespace cv {
 //! @addtogroup aruco
 //! @{
 
-enum CornerRefineMethod{
+enum ArucoCornerRefineMethod{
     CORNER_REFINE_NONE,     ///< Tag and corners detection based on the ArUco approach
     CORNER_REFINE_SUBPIX,   ///< ArUco approach and refine the corners locations using corner subpixel accuracy
     CORNER_REFINE_CONTOUR,  ///< ArUco approach and refine the corners locations using the contour-points line fitting
@@ -303,7 +303,7 @@ public:
      * @param _params marker detection parameters
      * @param _refineParams marker refine detection parameters
      */
-    CV_WRAP ArucoDetector(const Ptr<ArucoDictionary> &_dictionary = getPredefinedDictionary(DICT_4X4_50),
+    CV_WRAP ArucoDetector(const Ptr<ArucoDictionary> &_dictionary = ArucoDictionary::getPredefinedDictionary(DICT_4X4_50),
                   const Ptr<DetectorParameters> &_params = DetectorParameters::create(),
                   const Ptr<RefineParameters> &_refineParams = RefineParameters::create()):
                   dictionary(_dictionary), params(_params), refineParams(_refineParams) {}
@@ -390,8 +390,6 @@ public:
         params->readDetectorParameters(fn);
         refineParams->readRefineParameters(fn);
     }
-};
-
 /**
  * @brief Draw detected markers in image
  *
@@ -410,7 +408,7 @@ public:
  * Useful for debugging purposes.
  *
  */
-CV_EXPORTS_W void drawDetectedMarkers(InputOutputArray image, InputArrayOfArrays corners,
+CV_WRAP static void drawDetectedMarkers(InputOutputArray image, InputArrayOfArrays corners,
                                       InputArray ids = noArray(), Scalar borderColor = Scalar(0, 255, 0));
 
 /**
@@ -425,8 +423,9 @@ CV_EXPORTS_W void drawDetectedMarkers(InputOutputArray image, InputArrayOfArrays
  *
  * This function returns a marker image in its canonical form (i.e. ready to be printed)
  */
-CV_EXPORTS_W void drawMarker(const Ptr<ArucoDictionary> &dictionary, int id, int sidePixels, OutputArray img,
-                             int borderBits = 1);
+    CV_WRAP static void drawMarker(const Ptr<ArucoDictionary> &dictionary, int id, int sidePixels, OutputArray img,
+                                   int borderBits = 1);
+};
 
 //! @}
 

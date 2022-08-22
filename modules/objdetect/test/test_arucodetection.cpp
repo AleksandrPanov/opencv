@@ -57,7 +57,7 @@ CV_ArucoDetectionSimple::CV_ArucoDetectionSimple() {}
 
 
 void CV_ArucoDetectionSimple::run(int) {
-    ArucoDetector detector(getPredefinedDictionary(DICT_6X6_250));
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_6X6_250));
 
     // 20 images
     for(int i = 0; i < 20; i++) {
@@ -73,7 +73,7 @@ void CV_ArucoDetectionSimple::run(int) {
             for(int x = 0; x < 2; x++) {
                 Mat marker;
                 int id = i * 4 + y * 2 + x;
-                drawMarker(detector.dictionary, id, markerSidePixels, marker);
+                ArucoDetector::drawMarker(detector.dictionary, id, markerSidePixels, marker);
                 Point2f firstCorner =
                     Point2f(markerSidePixels / 2.f + x * (1.5f * markerSidePixels),
                             markerSidePixels / 2.f + y * (1.5f * markerSidePixels));
@@ -186,7 +186,7 @@ static Mat projectMarker(Ptr<ArucoDictionary> &dictionary, int id, Mat cameraMat
     Mat marker, markerImg;
     const int markerSizePixels = 100;
 
-    drawMarker(dictionary, id, markerSizePixels, marker, markerBorder);
+    ArucoDetector::drawMarker(dictionary, id, markerSizePixels, marker, markerBorder);
     marker.copyTo(markerImg);
 
     if(encloseMarker){ //to enclose the marker
@@ -277,7 +277,7 @@ void CV_ArucoDetectionPerspective::run(int) {
     cameraMatrix.at<double>(1, 2) = imgSize.height / 2;
     Ptr<DetectorParameters> params = DetectorParameters::create();
     params->minDistanceToBorder = 1;
-    ArucoDetector detector(getPredefinedDictionary(DICT_6X6_250), params);
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_6X6_250), params);
 
     // detect from different positions
     for(double distance = 0.1; distance < 0.7; distance += 0.2) {
@@ -359,7 +359,7 @@ CV_ArucoDetectionMarkerSize::CV_ArucoDetectionMarkerSize() {}
 
 void CV_ArucoDetectionMarkerSize::run(int) {
     Ptr<DetectorParameters> params = DetectorParameters::create();
-    ArucoDetector detector(getPredefinedDictionary(DICT_6X6_250), params);
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_6X6_250), params);
     int markerSide = 20;
     int imageSize = 200;
 
@@ -370,7 +370,7 @@ void CV_ArucoDetectionMarkerSize::run(int) {
 
         // create synthetic image
         Mat img = Mat(imageSize, imageSize, CV_8UC1, Scalar::all(255));
-        drawMarker(detector.dictionary, id, markerSide, marker);
+        ArucoDetector::drawMarker(detector.dictionary, id, markerSide, marker);
         Mat aux = img.colRange(30, 30 + markerSide).rowRange(50, 50 + markerSide);
         marker.copyTo(aux);
 
@@ -433,8 +433,8 @@ CV_ArucoBitCorrection::CV_ArucoBitCorrection() {}
 
 void CV_ArucoBitCorrection::run(int) {
 
-    Ptr<ArucoDictionary> _dictionary1 = getPredefinedDictionary(DICT_6X6_250);
-    Ptr<ArucoDictionary> _dictionary2 = getPredefinedDictionary(DICT_6X6_250);
+    Ptr<ArucoDictionary> _dictionary1 = ArucoDictionary::getPredefinedDictionary(DICT_6X6_250);
+    Ptr<ArucoDictionary> _dictionary2 = ArucoDictionary::getPredefinedDictionary(DICT_6X6_250);
     ArucoDictionary &dictionary1 = *_dictionary1;
     ArucoDictionary &dictionary2 = *_dictionary2;
     Ptr<DetectorParameters> params = DetectorParameters::create();
@@ -568,7 +568,7 @@ TEST(CV_ArucoTutorial, can_find_singlemarkersoriginal)
 {
     string img_path = cvtest::findDataFile("singlemarkersoriginal.jpg", false);
     Mat image = imread(img_path);
-    ArucoDetector detector(getPredefinedDictionary(DICT_6X6_250));
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_6X6_250));
 
     vector<int> ids;
     vector<vector<Point2f> > corners, rejected;
@@ -656,7 +656,7 @@ TEST(CV_ArucoTutorial, can_find_gboriginal)
 
 TEST(CV_ArucoDetectMarkers, regression_3192)
 {
-    ArucoDetector detector(getPredefinedDictionary(DICT_4X4_50));
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_4X4_50));
     vector<int> markerIds;
     vector<vector<Point2f> > markerCorners;
     string imgPath = cvtest::findDataFile("aruco/regression_3192.png");
@@ -686,7 +686,7 @@ TEST(CV_ArucoDetectMarkers, regression_3192)
 
 TEST(CV_ArucoDetectMarkers, regression_2492)
 {
-    ArucoDetector detector(getPredefinedDictionary(DICT_5X5_50));
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_5X5_50));
     detector.params->minMarkerDistanceRate = 0.026;
     vector<int> markerIds;
     vector<vector<Point2f> > markerCorners;
@@ -725,7 +725,7 @@ TEST(CV_ArucoDetectMarkers, regression_2492)
     }
 }
 
-struct ArucoThreading: public testing::TestWithParam<cv::CornerRefineMethod>
+struct ArucoThreading: public testing::TestWithParam<cv::ArucoCornerRefineMethod>
 {
     struct NumThreadsSetter {
         NumThreadsSetter(const int num_threads)
@@ -746,7 +746,7 @@ TEST_P(ArucoThreading, number_of_threads_does_not_change_results)
     // We are not testing against different dictionaries
     // As we are interested mostly in small images, smaller
     // markers is better -> 4x4
-    ArucoDetector detector(getPredefinedDictionary(DICT_4X4_50));
+    ArucoDetector detector(ArucoDictionary::getPredefinedDictionary(DICT_4X4_50));
 
     // Height of the test image can be chosen quite freely
     // We aim to test against small images as in those the
@@ -757,11 +757,11 @@ TEST_P(ArucoThreading, number_of_threads_does_not_change_results)
     const int height_marker = height_img-2*shift;
 
     // Create a test image
-    cv::Mat img_marker;
-    cv::drawMarker(detector.dictionary, 23, height_marker, img_marker, 1);
+    Mat img_marker;
+    ArucoDetector::drawMarker(detector.dictionary, 23, height_marker, img_marker, 1);
 
     // Copy to bigger image to get a white border
-    cv::Mat img(height_img, height_img, CV_8UC1, cv::Scalar(255));
+    Mat img(height_img, height_img, CV_8UC1, cv::Scalar(255));
     img_marker.copyTo(img(cv::Rect(shift, shift, height_marker, height_marker)));
 
     detector.params->cornerRefinementMethod = GetParam();

@@ -1212,7 +1212,7 @@ void ArucoDetector::refineDetectedMarkers(InputArray _image, const Ptr<BaseAruco
 }
 
 
-void drawDetectedMarkers(InputOutputArray _image, InputArrayOfArrays _corners,
+void ArucoDetector::drawDetectedMarkers(InputOutputArray _image, InputArrayOfArrays _corners,
                          InputArray _ids, Scalar borderColor) {
     CV_Assert(_image.getMat().total() != 0 &&
               (_image.getMat().channels() == 1 || _image.getMat().channels() == 3));
@@ -1253,7 +1253,7 @@ void drawDetectedMarkers(InputOutputArray _image, InputArrayOfArrays _corners,
     }
 }
 
-void drawMarker(const Ptr<ArucoDictionary> &dictionary, int id, int sidePixels, OutputArray _img, int borderBits) {
+void ArucoDetector::drawMarker(const Ptr<ArucoDictionary> &dictionary, int id, int sidePixels, OutputArray _img, int borderBits) {
     dictionary->drawMarker(id, sidePixels, _img, borderBits);
 }
 

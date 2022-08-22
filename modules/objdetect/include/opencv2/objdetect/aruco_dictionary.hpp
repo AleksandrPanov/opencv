@@ -11,6 +11,37 @@ namespace cv {
 //! @addtogroup aruco
 //! @{
 
+/**
+ * @brief Predefined markers dictionaries/sets
+ * Each dictionary indicates the number of bits and the number of markers contained
+ * - DICT_ARUCO_ORIGINAL: standard ArUco Library Markers. 1024 markers, 5x5 bits, 0 minimum
+                          distance
+ */
+enum PREDEFINED_ARUCO_DICTIONARY_NAME {
+    DICT_4X4_50 = 0,        ///< 4x4 bits, minimum hamming distance between any two codes = 4, 50 codes
+    DICT_4X4_100,           ///< 4x4 bits, minimum hamming distance between any two codes = 3, 100 codes
+    DICT_4X4_250,           ///< 4x4 bits, minimum hamming distance between any two codes = 3, 250 codes
+    DICT_4X4_1000,          ///< 4x4 bits, minimum hamming distance between any two codes = 2, 1000 codes
+    DICT_5X5_50,            ///< 5x5 bits, minimum hamming distance between any two codes = 8, 50 codes
+    DICT_5X5_100,           ///< 5x5 bits, minimum hamming distance between any two codes = 7, 100 codes
+    DICT_5X5_250,           ///< 5x5 bits, minimum hamming distance between any two codes = 6, 250 codes
+    DICT_5X5_1000,          ///< 5x5 bits, minimum hamming distance between any two codes = 5, 1000 codes
+    DICT_6X6_50,            ///< 6x6 bits, minimum hamming distance between any two codes = 13, 50 codes
+    DICT_6X6_100,           ///< 6x6 bits, minimum hamming distance between any two codes = 12, 100 codes
+    DICT_6X6_250,           ///< 6x6 bits, minimum hamming distance between any two codes = 11, 250 codes
+    DICT_6X6_1000,          ///< 6x6 bits, minimum hamming distance between any two codes = 9, 1000 codes
+    DICT_7X7_50,            ///< 7x7 bits, minimum hamming distance between any two codes = 19, 50 codes
+    DICT_7X7_100,           ///< 7x7 bits, minimum hamming distance between any two codes = 18, 100 codes
+    DICT_7X7_250,           ///< 7x7 bits, minimum hamming distance between any two codes = 17, 250 codes
+    DICT_7X7_1000,          ///< 7x7 bits, minimum hamming distance between any two codes = 14, 1000 codes
+    DICT_ARUCO_ORIGINAL,    ///< 6x6 bits, minimum hamming distance between any two codes = 3, 1024 codes
+    DICT_APRILTAG_16h5,     ///< 4x4 bits, minimum hamming distance between any two codes = 5, 30 codes
+    DICT_APRILTAG_25h9,     ///< 5x5 bits, minimum hamming distance between any two codes = 9, 35 codes
+    DICT_APRILTAG_36h10,    ///< 6x6 bits, minimum hamming distance between any two codes = 10, 2320 codes
+    DICT_APRILTAG_36h11     ///< 6x6 bits, minimum hamming distance between any two codes = 11, 587 codes
+};
+
+using PREDEFINED_DICTIONARY_NAME = PREDEFINED_ARUCO_DICTIONARY_NAME;
 
 /**
  * @brief Dictionary/Set of markers. It contains the inner codification
@@ -23,8 +54,7 @@ namespace cv {
  * `bytesList.ptr(i)[k*nbytes + j]` is then the j-th byte of i-th marker, in its k-th rotation.
  */
 class CV_EXPORTS_W ArucoDictionary {
-
-    public:
+public:
     CV_PROP_RW Mat bytesList;         // marker code information
     CV_PROP_RW int markerSize;        // number of bits per dimension
     CV_PROP_RW int maxCorrectionBits; // maximum number of bits that can be corrected
@@ -101,88 +131,47 @@ class CV_EXPORTS_W ArucoDictionary {
       * @brief Transform list of bytes to matrix of bits
       */
     CV_WRAP static Mat getBitsFromByteList(const Mat &byteList, int markerSize);
+
+    /**
+      * @brief Returns one of the predefined dictionaries defined in PREDEFINED_DICTIONARY_NAME
+      */
+    CV_WRAP static Ptr<ArucoDictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name);
+
+
+    /**
+      * @brief Returns one of the predefined dictionaries referenced by DICT_*.
+      */
+    CV_WRAP static Ptr<ArucoDictionary> getPredefinedDictionary(int dict);
+
+
+    /**
+     * @see generateCustomDictionary
+     */
+    CV_WRAP_AS(custom_dictionary)
+    static Ptr<ArucoDictionary> generateCustomDictionary(int nMarkers, int markerSize, int randomSeed=0);
+
+
+    /**
+      * @brief Generates a new customizable marker dictionary
+      *
+      * @param nMarkers number of markers in the dictionary
+      * @param markerSize number of bits per dimension of each markers
+      * @param baseDictionary Include the markers in this dictionary at the beginning (optional)
+      * @param randomSeed a user supplied seed for theRNG()
+      *
+      * This function creates a new dictionary composed by nMarkers markers and each markers composed
+      * by markerSize x markerSize bits. If baseDictionary is provided, its markers are directly
+      * included and the rest are generated based on them. If the size of baseDictionary is higher
+      * than nMarkers, only the first nMarkers in baseDictionary are taken and no new marker is added.
+      */
+    CV_WRAP_AS(custom_dictionary_from)
+    static Ptr<ArucoDictionary>generateCustomDictionary(int nMarkers, int markerSize,
+                                                        const Ptr<ArucoDictionary> &baseDictionary,
+                                                        int randomSeed=0);
 };
-
-
-
-
-/**
- * @brief Predefined markers dictionaries/sets
- * Each dictionary indicates the number of bits and the number of markers contained
- * - DICT_ARUCO_ORIGINAL: standard ArUco Library Markers. 1024 markers, 5x5 bits, 0 minimum
-                          distance
- */
-enum PREDEFINED_DICTIONARY_NAME {
-    DICT_4X4_50 = 0,        ///< 4x4 bits, minimum hamming distance between any two codes = 4, 50 codes
-    DICT_4X4_100,           ///< 4x4 bits, minimum hamming distance between any two codes = 3, 100 codes
-    DICT_4X4_250,           ///< 4x4 bits, minimum hamming distance between any two codes = 3, 250 codes
-    DICT_4X4_1000,          ///< 4x4 bits, minimum hamming distance between any two codes = 2, 1000 codes
-    DICT_5X5_50,            ///< 5x5 bits, minimum hamming distance between any two codes = 8, 50 codes
-    DICT_5X5_100,           ///< 5x5 bits, minimum hamming distance between any two codes = 7, 100 codes
-    DICT_5X5_250,           ///< 5x5 bits, minimum hamming distance between any two codes = 6, 250 codes
-    DICT_5X5_1000,          ///< 5x5 bits, minimum hamming distance between any two codes = 5, 1000 codes
-    DICT_6X6_50,            ///< 6x6 bits, minimum hamming distance between any two codes = 13, 50 codes
-    DICT_6X6_100,           ///< 6x6 bits, minimum hamming distance between any two codes = 12, 100 codes
-    DICT_6X6_250,           ///< 6x6 bits, minimum hamming distance between any two codes = 11, 250 codes
-    DICT_6X6_1000,          ///< 6x6 bits, minimum hamming distance between any two codes = 9, 1000 codes
-    DICT_7X7_50,            ///< 7x7 bits, minimum hamming distance between any two codes = 19, 50 codes
-    DICT_7X7_100,           ///< 7x7 bits, minimum hamming distance between any two codes = 18, 100 codes
-    DICT_7X7_250,           ///< 7x7 bits, minimum hamming distance between any two codes = 17, 250 codes
-    DICT_7X7_1000,          ///< 7x7 bits, minimum hamming distance between any two codes = 14, 1000 codes
-    DICT_ARUCO_ORIGINAL,    ///< 6x6 bits, minimum hamming distance between any two codes = 3, 1024 codes
-    DICT_APRILTAG_16h5,     ///< 4x4 bits, minimum hamming distance between any two codes = 5, 30 codes
-    DICT_APRILTAG_25h9,     ///< 5x5 bits, minimum hamming distance between any two codes = 9, 35 codes
-    DICT_APRILTAG_36h10,    ///< 6x6 bits, minimum hamming distance between any two codes = 10, 2320 codes
-    DICT_APRILTAG_36h11     ///< 6x6 bits, minimum hamming distance between any two codes = 11, 587 codes
-};
-
-
-/**
-  * @brief Returns one of the predefined dictionaries defined in PREDEFINED_DICTIONARY_NAME
-  */
-CV_EXPORTS Ptr<ArucoDictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name);
-
-
-/**
-  * @brief Returns one of the predefined dictionaries referenced by DICT_*.
-  */
-CV_EXPORTS_W Ptr<ArucoDictionary> getPredefinedDictionary(int dict);
-
-
-/**
-  * @see generateCustomDictionary
-  */
-CV_EXPORTS_AS(custom_dictionary) Ptr<ArucoDictionary> generateCustomDictionary(
-        int nMarkers,
-        int markerSize,
-        int randomSeed=0);
-
-
-/**
-  * @brief Generates a new customizable marker dictionary
-  *
-  * @param nMarkers number of markers in the dictionary
-  * @param markerSize number of bits per dimension of each markers
-  * @param baseDictionary Include the markers in this dictionary at the beginning (optional)
-  * @param randomSeed a user supplied seed for theRNG()
-  *
-  * This function creates a new dictionary composed by nMarkers markers and each markers composed
-  * by markerSize x markerSize bits. If baseDictionary is provided, its markers are directly
-  * included and the rest are generated based on them. If the size of baseDictionary is higher
-  * than nMarkers, only the first nMarkers in baseDictionary are taken and no new marker is added.
-  */
-CV_EXPORTS_AS(custom_dictionary_from) Ptr<ArucoDictionary> generateCustomDictionary(
-        int nMarkers,
-        int markerSize,
-        const Ptr<ArucoDictionary> &baseDictionary,
-        int randomSeed=0);
 
 //! @}
 
-namespace aruco {
-using Dictionary = ArucoDictionary;
-//using PREDEFINED_DICTIONARY_NAME = PREDEFINED_DICTIONARY_NAME;
-}
 
 }
 

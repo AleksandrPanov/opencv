@@ -27,6 +27,19 @@ class CV_EXPORTS_W BaseArucoBoard {
 public:
     CV_WRAP BaseArucoBoard();
 
+    /**
+     * @brief Draw a BaseArucoBoard, the board should be planar, z coordinate is ignored
+     *
+     * @param outSize size of the output image in pixels.
+     * @param img output image with the board. The size of this image will be outSize
+     * and the board will be on the center, keeping the board proportions.
+     * @param marginSize minimum margins (in pixels) of the board in the output image
+     * @param borderBits width of the marker borders.
+     *
+     * This function return the image of the BaseArucoBoard, ready to be printed.
+     */
+    CV_WRAP void draw(Size outSize, OutputArray img, int marginSize = 0, int borderBits = 1);
+
     /** @brief Provide way to create BaseArucoBoard by passing necessary data. Specially needed in Python.
      * @param objPoints array of object points of all the marker corners in the board
      * @param dictionary the dictionary of markers employed for this board
@@ -97,29 +110,10 @@ protected:
 };
 
 /**
- * @brief Draw a planar board
- * @sa drawPlanarBoard
- *
- * @param board layout of the board that will be drawn. The board should be planar,
- * z coordinate is ignored
- * @param outSize size of the output image in pixels.
- * @param img output image with the board. The size of this image will be outSize
- * and the board will be on the center, keeping the board proportions.
- * @param marginSize minimum margins (in pixels) of the board in the output image
- * @param borderBits width of the marker borders.
- *
- * This function return the image of a planar board, ready to be printed. It assumes
- * the BaseArucoBoard layout specified is planar by ignoring the z coordinates of the object points.
- */
-CV_EXPORTS_W void drawPlanarBoard(const Ptr<BaseArucoBoard> &board, Size outSize, OutputArray img,
-                                  int marginSize = 0, int borderBits = 1);
-
-/**
  * @brief Planar board with grid arrangement of markers
  * More common type of board. All markers are placed in the same plane in a grid arrangement.
  * The board can be drawn using drawPlanarBoard() function (@sa drawPlanarBoard)
  */
-
 class CV_EXPORTS_W GridArucoBoard : public BaseArucoBoard {
 public:
     CV_WRAP GridArucoBoard();
@@ -213,35 +207,25 @@ public:
     CV_WRAP Size getChessboardSize() const;
     CV_WRAP float getSquareLength() const;
     CV_WRAP float getMarkerLength() const;
-
+    /**
+     * @brief test whether the ChArUco markers are collinear
+     *
+     * @param charucoIds list of identifiers for each corner in charucoCorners per frame.
+     * @return bool value, 1 (true) if detected corners form a line, 0 (false) if they do not.
+     * solvePnP, calibration functions will fail if the corners are collinear (true).
+     *
+     * The number of ids in charucoIDs should be <= the number of chessboard corners in the board.
+     * This functions checks whether the charuco corners are on a straight line (returns true, if so), or not (false).
+     * Axis parallel, as well as diagonal and other straight lines detected.  Degenerate cases:
+     * for number of charucoIDs <= 2,the function returns true.
+     */
+    CV_WRAP bool testCharucoCornersCollinear(InputArray charucoIds);
 protected:
     struct CharucoImpl;
     Ptr<CharucoImpl> charucoImpl;
 };
 
-/**
- * @brief test whether the ChArUco markers are collinear
- *
- * @param board layout of ChArUco board.
- * @param charucoIds list of identifiers for each corner in charucoCorners per frame.
- * @return bool value, 1 (true) if detected corners form a line, 0 (false) if they do not.
- * solvePnP, calibration functions will fail if the corners are collinear (true).
- *
- * The number of ids in charucoIDs should be <= the number of chessboard corners in the board.
- * This functions checks whether the charuco corners are on a straight line (returns true, if so), or not (false).
- * Axis parallel, as well as diagonal and other straight lines detected.  Degenerate cases:
- * for number of charucoIDs <= 2,the function returns true.
- */
-CV_EXPORTS_W bool testCharucoCornersCollinear(const Ptr<ChArucoBoard> &board, InputArray charucoIds);
-
 //! @}
-
-// Todo: recheck
-namespace aruco {
-using Board = BaseArucoBoard;
-using GridBoard = GridArucoBoard;
-using CharucoBoard = ChArucoBoard;
-}
 
 }
 

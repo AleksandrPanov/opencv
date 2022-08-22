@@ -37,7 +37,7 @@ Ptr<ArucoDictionary> ArucoDictionary::create(int nMarkers, int markerSize, int r
 
 Ptr<ArucoDictionary> ArucoDictionary::create(int nMarkers, int markerSize,
                                    const Ptr<ArucoDictionary> &baseDictionary, int randomSeed) {
-    return generateCustomDictionary(nMarkers, markerSize, baseDictionary, randomSeed);
+    return ArucoDictionary::generateCustomDictionary(nMarkers, markerSize, baseDictionary, randomSeed);
 }
 
 
@@ -241,7 +241,7 @@ Mat ArucoDictionary::getBitsFromByteList(const Mat &byteList, int markerSize) {
 }
 
 
-Ptr<ArucoDictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name) {
+Ptr<ArucoDictionary> ArucoDictionary::getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name) {
     // DictionaryData constructors calls
     //    moved out of globals so construted on first use, which allows lazy-loading of opencv dll
     static const ArucoDictionary DICT_ARUCO_DATA = ArucoDictionary(Mat(1024, (5 * 5 + 7) / 8, CV_8UC4, (uchar*)DICT_ARUCO_BYTES), 5, 0);
@@ -326,8 +326,8 @@ Ptr<ArucoDictionary> getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME name) {
 }
 
 
-Ptr<ArucoDictionary> getPredefinedDictionary(int dict) {
-    return getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME(dict));
+Ptr<ArucoDictionary> ArucoDictionary::getPredefinedDictionary(int dict) {
+    return ArucoDictionary::getPredefinedDictionary(PREDEFINED_DICTIONARY_NAME(dict));
 }
 
 
@@ -363,8 +363,9 @@ static int _getSelfDistance(const Mat &marker) {
 }
 
 
-Ptr<ArucoDictionary> generateCustomDictionary(int nMarkers, int markerSize,
-                                         const Ptr<ArucoDictionary> &baseDictionary, int randomSeed) {
+Ptr<ArucoDictionary> ArucoDictionary::generateCustomDictionary(int nMarkers, int markerSize,
+                                                               const Ptr<ArucoDictionary> &baseDictionary,
+                                                               int randomSeed) {
     RNG rng((uint64)(randomSeed));
 
     Ptr<ArucoDictionary> out = makePtr<ArucoDictionary>();
@@ -453,7 +454,7 @@ Ptr<ArucoDictionary> generateCustomDictionary(int nMarkers, int markerSize,
 }
 
 
-Ptr<ArucoDictionary> generateCustomDictionary(int nMarkers, int markerSize, int randomSeed) {
+Ptr<ArucoDictionary> ArucoDictionary::generateCustomDictionary(int nMarkers, int markerSize, int randomSeed) {
     Ptr<ArucoDictionary> baseDictionary = makePtr<ArucoDictionary>();
     return generateCustomDictionary(nMarkers, markerSize, baseDictionary, randomSeed);
 }
