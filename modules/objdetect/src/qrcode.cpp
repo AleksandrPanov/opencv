@@ -672,9 +672,42 @@ bool QRDetect::computeTransformationPoints()
     transformation_points.push_back(down_left_edge_point);
     transformation_points.push_back(up_left_edge_point);
     transformation_points.push_back(up_right_edge_point);
-    transformation_points.push_back(
-        intersectionLines(down_left_edge_point, down_max_delta_point,
-                          up_right_edge_point, up_max_delta_point));
+    Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
+                          up_right_edge_point, up_max_delta_point);
+    bool down = false;
+    bool right = false;
+    while (1) {
+        const double coeff = .4;
+        if (down == false) {
+            LineIterator itLeft(down_right_edge_point, down_left_edge_point);
+            const int count = itLeft.count * coeff;
+            for (int i = 0; i < count; i++) {
+                if (bin_barcode.at<unsigned char>(itLeft.pos()) < 255) {
+                    down = true;
+                    break;
+                }
+                itLeft++;
+            }
+            if (down == false)
+                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
+        }
+        if (right == false) {
+            LineIterator itTop(down_right_edge_point, up_right_edge_point);
+            const int count = itTop.count * coeff;
+            for (int i = 0; i < count; i++) {
+                if (bin_barcode.at<unsigned char>(itTop.pos()) < 255) {
+                    right = true;
+                    break;
+                }
+                itTop++;
+            }
+            if (right == false)
+                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
+        }
+        if (down && right)
+            break;
+    }
+    transformation_points.push_back(down_right_edge_point);
     vector<Point2f> quadrilateral = getQuadrilateral(transformation_points);
     transformation_points = quadrilateral;
 
@@ -3490,9 +3523,44 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     tmp_transformation_points.push_back(down_left_edge_point);
     tmp_transformation_points.push_back(up_left_edge_point);
     tmp_transformation_points.push_back(up_right_edge_point);
-    tmp_transformation_points.push_back(intersectionLines(
-                    down_left_edge_point, down_max_delta_point,
-                    up_right_edge_point, up_max_delta_point));
+    Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
+                                    up_right_edge_point, up_max_delta_point);
+    bool down = false;
+    bool right = false;
+    int iter = 0;
+    while (iter < 500) {
+        const double coeff = .5;
+        if (down == false) {
+            LineIterator itLeft(down_right_edge_point, down_left_edge_point);
+            const int count = itLeft.count * coeff;
+            for (int i = 0; i < count; i++) {
+                if (bin_barcode.at<unsigned char>(itLeft.pos()) < 255) {
+                    down = true;
+                    break;
+                }
+                itLeft++;
+            }
+            if (down == false)
+                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
+        }
+        if (right == false) {
+            LineIterator itTop(down_right_edge_point, up_right_edge_point);
+            const int count = itTop.count * coeff;
+            for (int i = 0; i < count; i++) {
+                if (bin_barcode.at<unsigned char>(itTop.pos()) < 255) {
+                    right = true;
+                    break;
+                }
+                itTop++;
+            }
+            if (right == false)
+                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
+        }
+        if (down && right)
+            break;
+        iter++;
+    }
+    tmp_transformation_points.push_back(down_right_edge_point);
     transformation_points[cur_ind] = tmp_transformation_points;
 
     vector<Point2f> quadrilateral = getQuadrilateral(transformation_points[cur_ind]);
