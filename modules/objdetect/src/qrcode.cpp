@@ -19,6 +19,8 @@
 #include <queue>
 #include <limits>
 #include <map>
+#include <opencv2/highgui.hpp>
+#include <iostream>
 
 namespace cv
 {
@@ -674,39 +676,6 @@ bool QRDetect::computeTransformationPoints()
     transformation_points.push_back(up_right_edge_point);
     Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
                           up_right_edge_point, up_max_delta_point);
-    bool down = false;
-    bool right = false;
-    while (1) {
-        const double coeff = .4;
-        if (down == false) {
-            LineIterator itLeft(down_right_edge_point, down_left_edge_point);
-            const int count = itLeft.count * coeff;
-            for (int i = 0; i < count; i++) {
-                if (bin_barcode.at<unsigned char>(itLeft.pos()) < 255) {
-                    down = true;
-                    break;
-                }
-                itLeft++;
-            }
-            if (down == false)
-                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
-        }
-        if (right == false) {
-            LineIterator itTop(down_right_edge_point, up_right_edge_point);
-            const int count = itTop.count * coeff;
-            for (int i = 0; i < count; i++) {
-                if (bin_barcode.at<unsigned char>(itTop.pos()) < 255) {
-                    right = true;
-                    break;
-                }
-                itTop++;
-            }
-            if (right == false)
-                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
-        }
-        if (down && right)
-            break;
-    }
     transformation_points.push_back(down_right_edge_point);
     vector<Point2f> quadrilateral = getQuadrilateral(transformation_points);
     transformation_points = quadrilateral;
@@ -3398,6 +3367,23 @@ bool QRDetectMulti::localization()
     return true;
 }
 
+bool static inline checkLine(const Mat& bin_qr, LineIterator lineIt1, LineIterator lineIt2, const int count) {
+    Rect tmp(Point(0, 0), bin_qr.size());
+    for (int i = 0; i < count && tmp.contains(lineIt1.pos()); i++) {
+        const unsigned char pixel = bin_qr.at<unsigned char>(lineIt1.pos());
+        if (pixel < 255)
+            return false;
+        lineIt1++;
+    }
+    for (int i = 0; i < count && tmp.contains(lineIt2.pos()); i++) {
+        const unsigned char pixel = bin_qr.at<unsigned char>(lineIt2.pos());
+        if (pixel < 255)
+            return false;
+        lineIt2++;
+    }
+    return true;
+}
+
 bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
 {
     CV_TRACE_FUNCTION();
@@ -3525,39 +3511,51 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     tmp_transformation_points.push_back(up_right_edge_point);
     Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
                                     up_right_edge_point, up_max_delta_point);
-    bool down = false;
-    bool right = false;
+    Point2f offset = ((down_max_delta_point - down_left_edge_point) + (up_max_delta_point - up_right_edge_point))/2.f;
+    down_right_edge_point += offset;
     int iter = 0;
-    while (iter < 500) {
-        const double coeff = .5;
-        if (down == false) {
-            LineIterator itLeft(down_right_edge_point, down_left_edge_point);
-            const int count = itLeft.count * coeff;
-            for (int i = 0; i < count; i++) {
-                if (bin_barcode.at<unsigned char>(itLeft.pos()) < 255) {
-                    down = true;
-                    break;
-                }
-                itLeft++;
-            }
-            if (down == false)
-                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
+    const int maxIter = (abs(offset.x) + abs(offset.y))*2.f;
+    const double coeff = .5;
+    //imwrite("test.png", bin_barcode);
+    while (iter < maxIter) {
+        LineIterator itLeftNew(down_right_edge_point, down_left_edge_point);
+        itLeftNew++;
+        itLeftNew++;
+        LineIterator itComboNew(itLeftNew.pos(), up_right_edge_point);
+        itComboNew++;
+        itComboNew++;
+        LineIterator itTopNew(down_right_edge_point, up_right_edge_point);
+        itTopNew++;
+        itTopNew++;
+        if (iter == 0) {
+            int a = 1;
         }
-        if (right == false) {
-            LineIterator itTop(down_right_edge_point, up_right_edge_point);
-            const int count = itTop.count * coeff;
-            for (int i = 0; i < count; i++) {
-                if (bin_barcode.at<unsigned char>(itTop.pos()) < 255) {
-                    right = true;
-                    break;
-                }
-                itTop++;
-            }
-            if (right == false)
-                down_right_edge_point = (++LineIterator(down_right_edge_point, down_left_edge_point)).pos();
+        if (iter == 1) {
+            int a = 1;
         }
-        if (down && right)
+        if (iter == 2) {
+            int a = 1;
+        }
+        if (checkLine(bin_barcode,
+                      LineIterator(itComboNew.pos(), down_left_edge_point),
+                      LineIterator(itComboNew.pos(), up_right_edge_point), itComboNew.count * coeff)) {
+            down_right_edge_point = itComboNew.pos();
+        }
+        else if (checkLine(bin_barcode,
+                           LineIterator(itLeftNew.pos(), down_left_edge_point),
+                           LineIterator(itLeftNew.pos(), up_right_edge_point),
+                           itLeftNew.count * coeff)) {
+            down_right_edge_point = itLeftNew.pos();
+        }
+        else if (checkLine(bin_barcode,
+                           LineIterator(itTopNew.pos(), down_left_edge_point),
+                           LineIterator(itTopNew.pos(), up_right_edge_point),
+                           itTopNew.count * coeff)) {
+            down_right_edge_point = itTopNew.pos();
+        }
+        else {
             break;
+        }
         iter++;
     }
     tmp_transformation_points.push_back(down_right_edge_point);
@@ -3565,7 +3563,6 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
 
     vector<Point2f> quadrilateral = getQuadrilateral(transformation_points[cur_ind]);
     transformation_points[cur_ind] = quadrilateral;
-
     return true;
 }
 

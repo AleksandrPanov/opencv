@@ -758,6 +758,23 @@ TEST(Objdetect_QRCode_decode, decode_regression_version_25)
 #endif
 }
 
-#endif // UPDATE_QRCODE_TEST_DATA
+TEST(Objdetect_QRCode_detect, detect_rotate)
+{
+    //const std::string name_current_image = "ver15_rot.jpg";
+    const std::string name_current_image = "multiple/2_qrcodes.png";
+    const std::string root = "qrcode/";
 
+    std::string image_path = findDataFile(root + name_current_image);
+    Mat src = imread(image_path);
+    ASSERT_FALSE(src.empty()) << "Can't read image: " << image_path;
+
+    QRCodeDetector qrcode;
+    std::vector<Point> corners;
+    vector<Mat> straight_barcode;
+    std::vector<cv::String> decoded_info;
+
+    EXPECT_TRUE(qrcode.detectAndDecodeMulti(src, decoded_info, corners, straight_barcode));
+    EXPECT_TRUE(!corners.empty());
+}
+#endif
 }} // namespace
