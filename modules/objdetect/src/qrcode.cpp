@@ -3511,7 +3511,9 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     tmp_transformation_points.push_back(up_right_edge_point);
     Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
                                     up_right_edge_point, up_max_delta_point);
-    Point2f offset = ((down_max_delta_point - down_left_edge_point) + (up_max_delta_point - up_right_edge_point))/3.f;
+    const Point2f offset_x = (down_max_delta_point - down_left_edge_point)/3.f;
+    const Point2f offset_y = (up_max_delta_point - up_right_edge_point)/3.f;
+    const Point2f offset = offset_x + offset_y;
     int iter = 0;
     int maxIter = (abs(offset.x) + abs(offset.y))*2.f;
     const double coeff = .5;
@@ -3519,15 +3521,25 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     {
         LineIterator itLeft(down_right_edge_point, down_left_edge_point);
         LineIterator itTop(down_right_edge_point, up_right_edge_point);
-        if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count))
-        {
-            down_right_edge_point += offset;
+        if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count)) {
+            down_right_edge_point += offset_x;
             itLeft = LineIterator(down_right_edge_point, down_left_edge_point);
             itTop = LineIterator(down_right_edge_point, up_right_edge_point);
-            if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count))
-            {
-                down_right_edge_point -= offset;
-                maxIter = 0;
+            if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count)) {
+                down_right_edge_point -= offset_x;
+
+                down_right_edge_point += offset_y;
+                itLeft = LineIterator(down_right_edge_point, down_left_edge_point);
+                itTop = LineIterator(down_right_edge_point, up_right_edge_point);
+                if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count)) {
+                    down_right_edge_point += offset_x;
+                    itLeft = LineIterator(down_right_edge_point, down_left_edge_point);
+                    itTop = LineIterator(down_right_edge_point, up_right_edge_point);
+                    if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count)) {
+                        down_right_edge_point -= offset;
+                        maxIter = 0;
+                    }
+                }
             }
         }
     }
