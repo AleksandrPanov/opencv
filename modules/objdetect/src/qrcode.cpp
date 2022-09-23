@@ -3512,11 +3512,28 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
                                     up_right_edge_point, up_max_delta_point);
     Point2f offset = ((down_max_delta_point - down_left_edge_point) + (up_max_delta_point - up_right_edge_point))/2.f;
-    down_right_edge_point += offset;
     int iter = 0;
-    const int maxIter = (abs(offset.x) + abs(offset.y))*2.f;
+    int maxIter = (abs(offset.x) + abs(offset.y))*2.f;
     const double coeff = .5;
+    bool flag = false;
     //imwrite("test.png", bin_barcode);
+    {
+        LineIterator itLeft(down_right_edge_point, down_left_edge_point);
+        LineIterator itTop(down_right_edge_point, up_right_edge_point);
+        if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count))
+        {
+            down_right_edge_point += offset;
+            itLeft = LineIterator(down_right_edge_point, down_left_edge_point);
+            itTop = LineIterator(down_right_edge_point, up_right_edge_point);
+            if (checkLine(bin_barcode, itLeft, itTop, itLeft.count)) {
+            }
+            else
+            {
+                down_right_edge_point -= offset;
+                maxIter = 0;
+            }
+        }
+    }
     while (iter < maxIter) {
         LineIterator itLeftNew(down_right_edge_point, down_left_edge_point);
         itLeftNew++;
@@ -3527,15 +3544,6 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
         LineIterator itTopNew(down_right_edge_point, up_right_edge_point);
         itTopNew++;
         itTopNew++;
-        if (iter == 0) {
-            int a = 1;
-        }
-        if (iter == 1) {
-            int a = 1;
-        }
-        if (iter == 2) {
-            int a = 1;
-        }
         if (checkLine(bin_barcode,
                       LineIterator(itComboNew.pos(), down_left_edge_point),
                       LineIterator(itComboNew.pos(), up_right_edge_point), itComboNew.count * coeff)) {
