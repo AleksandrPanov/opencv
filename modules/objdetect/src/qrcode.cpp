@@ -3511,14 +3511,15 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     tmp_transformation_points.push_back(up_right_edge_point);
     Point2f down_right_edge_point = intersectionLines(down_left_edge_point, down_max_delta_point,
                                     up_right_edge_point, up_max_delta_point);
-    const Point2f offset_x = (down_max_delta_point - down_left_edge_point)/3.f;
-    const Point2f offset_y = (up_max_delta_point - up_right_edge_point)/3.f;
+    const Point2f offset_x = (down_max_delta_point - down_left_edge_point)/7.f;
+    const Point2f offset_y = (up_max_delta_point - up_right_edge_point)/7.f;
     const Point2f offset = offset_x + offset_y;
     int iter = 0;
-    int maxIter = (abs(offset.x) + abs(offset.y))*2.f;
-    const double coeff = .5;
+    int maxIter = (abs(offset.x) + abs(offset.y))*3.f; // 3 pin
+    //const double coeff = .5;
+    const int check_dist = maxIter * 4; // 12 pins
     //imwrite("test.png", bin_barcode);
-    {
+    if (maxIter > 0) {
         LineIterator itLeft(down_right_edge_point, down_left_edge_point);
         LineIterator itTop(down_right_edge_point, up_right_edge_point);
         if (!checkLine(bin_barcode, itLeft, itTop, itLeft.count)) {
@@ -3555,19 +3556,19 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
         itTopNew++;
         if (checkLine(bin_barcode,
                       LineIterator(itComboNew.pos(), down_left_edge_point),
-                      LineIterator(itComboNew.pos(), up_right_edge_point), itComboNew.count * coeff)) {
+                      LineIterator(itComboNew.pos(), up_right_edge_point), check_dist/*itComboNew.count * coeff*/)) {
             down_right_edge_point = itComboNew.pos();
         }
         else if (checkLine(bin_barcode,
                            LineIterator(itLeftNew.pos(), down_left_edge_point),
                            LineIterator(itLeftNew.pos(), up_right_edge_point),
-                           itLeftNew.count * coeff)) {
+                           check_dist/*itLeftNew.count * coeff*/)) {
             down_right_edge_point = itLeftNew.pos();
         }
         else if (checkLine(bin_barcode,
                            LineIterator(itTopNew.pos(), down_left_edge_point),
                            LineIterator(itTopNew.pos(), up_right_edge_point),
-                           itTopNew.count * coeff)) {
+                           check_dist/*itTopNew.count * coeff*/)) {
             down_right_edge_point = itTopNew.pos();
         }
         else {
