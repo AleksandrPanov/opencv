@@ -746,20 +746,26 @@ TEST(Objdetect_QRCode_decode, decode_regression_version_25)
 
     QRCodeDetector qrcode;
     std::vector<Point> corners;
-    Mat straight_barcode;
+    vector<Mat> straight_barcode;
+    std::vector<cv::String> decoded_info;
 
-    EXPECT_TRUE(qrcode.detect(src, corners));
+    EXPECT_TRUE(qrcode.detectAndDecodeMulti(src, decoded_info, corners, straight_barcode));
+    EXPECT_TRUE(!corners.empty());
+    EXPECT_TRUE(!decoded_info.empty());
+
+    /*EXPECT_TRUE(qrcode.detect(src, corners));
     EXPECT_TRUE(!corners.empty());
 #ifdef HAVE_QUIRC
     cv::String decoded_msg;
     EXPECT_NO_THROW(decoded_msg = qrcode.decode(src, corners, straight_barcode));
     ASSERT_FALSE(straight_barcode.empty()) << "Can't decode qrimage.";
     EXPECT_EQ(expect_msg, decoded_msg);
-#endif
+#endif*/
 }
 
 TEST(Objdetect_QRCode_detect, detect_rotate)
 {
+    //const std::string name_current_image = "version_1_down.jpg";
     //const std::string name_current_image = "ver15_rot.jpg";
     const std::string name_current_image = "multiple/2_qrcodes.png";
     const std::string root = "qrcode/";
@@ -775,6 +781,8 @@ TEST(Objdetect_QRCode_detect, detect_rotate)
 
     EXPECT_TRUE(qrcode.detectAndDecodeMulti(src, decoded_info, corners, straight_barcode));
     EXPECT_TRUE(!corners.empty());
+    EXPECT_TRUE(!decoded_info.empty());
+    EXPECT_TRUE(!decoded_info[0].empty());
 }
 #endif
 }} // namespace

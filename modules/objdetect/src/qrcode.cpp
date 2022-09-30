@@ -995,6 +995,8 @@ protected:
     bool versionDefinition();
     bool samplingForVersion();
     bool decodingProcess();
+    Mat getTransformationMatrix();
+    double getNumModules(Mat &warp);
     inline double pointPosition(Point2f a, Point2f b , Point2f c);
     float distancePointToLine(Point2f a, Point2f b , Point2f c);
     void getPointsInsideQRCode(const vector<Point2f> &angle_list);
@@ -2252,13 +2254,11 @@ bool QRDecode::preparingCurvedQRCodes()
     return true;
 }
 
-bool QRDecode::updatePerspective()
-{
-    CV_TRACE_FUNCTION();
+Mat QRDecode::getTransformationMatrix() {
     const Point2f centerPt = intersectionLines(original_points[0], original_points[2],
                                                original_points[1], original_points[3]);
     if (cvIsNaN(centerPt.x) || cvIsNaN(centerPt.y))
-        return false;
+        return Mat();
 
     const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
 
@@ -2275,15 +2275,81 @@ bool QRDecode::updatePerspective()
     pts.push_back(centerPt);
 
     Mat H = findHomography(pts, perspective_points);
-    Mat bin_original;
+    return H;
+}
+
+double QRDecode::getNumModules(cv::Mat &warp) {
+    imwrite("test_bin_barcode.png", bin_barcode);
+    double numModules = -1;
+    vector<vector<Point>> vertices;
+    bool flag = findPatternsVerticesPoints(vertices);
+
+    if (flag) {
+        vector<double> offsets;
+        for (auto& v : vertices) {
+            vector<Point2f> vf = {v[0], v[1], v[2], v[3]};
+            // original or bin_barcode
+            cornerSubPix(bin_barcode, vf, Size(5, 5), Size(-1, -1),
+                        TermCriteria(TermCriteria::MAX_ITER | TermCriteria::EPS, 30, 0.1));
+            perspectiveTransform(vf, vf, warp);
+            const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
+            for (int i = 1; i < 4; i++) {
+                offsets.push_back(cv::norm(vf[i] - vf[i-1]));
+            }
+            offsets.push_back(cv::norm(vf[3] - vf[0]));
+        }
+        double moduleSize = 0.;
+        for (double offset : offsets)
+            moduleSize += offset;
+        moduleSize /= (3.*4.*7.);
+        numModules = (double)test_perspective_size / moduleSize;
+    }
+    return numModules;
+}
+
+bool QRDecode::updatePerspective()
+{
+    CV_TRACE_FUNCTION();
+    Mat H = getTransformationMatrix();
+    if (H.empty())
+        return false;
+
+    double numModules = getNumModules(H);
+    if (numModules > 0) {
+        version = cvRound((numModules - 21) * .25) + 1;
+        if (version >= 1 && version <= 40) {
+            version_size = (version-1) * 4 + 21;
+            test_perspective_size = numModules * 3;
+
+            while (test_perspective_size < 250.f)
+                test_perspective_size *= 2.f;
+            test_perspective_size += 1.f;
+            H = getTransformationMatrix();
+
+            //if (version > 7) {
+            //    H = getTransformationMatrix();
+            //    numModules = getNumModules(H);
+            //    version = cvRound((numModules - 21) * .25) + 1;
+            //    version_size = (version-1) * 4 + 21;
+            //    test_perspective_size = numModules * 4 + 1.f;
+            //}
+        }
+        else
+            return false;
+    }
+    else
+        return false;
+
+    Mat bin_original, temp_intermediate;
     adaptiveThreshold(original, bin_original, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
-    Mat temp_intermediate;
+    const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
     warpPerspective(bin_original, temp_intermediate, H, temporary_size, INTER_NEAREST);
     no_border_intermediate = temp_intermediate(Range(1, temp_intermediate.rows), Range(1, temp_intermediate.cols));
 
     const int border = cvRound(0.1 * test_perspective_size);
     const int borderType = BORDER_CONSTANT;
     copyMakeBorder(no_border_intermediate, intermediate, border, border, border, border, borderType, Scalar(255));
+    imwrite("test_intermediate.png", no_border_intermediate);
     return true;
 }
 
@@ -2370,6 +2436,7 @@ bool QRDecode::versionDefinition()
 bool QRDecode::samplingForVersion()
 {
     CV_TRACE_FUNCTION();
+    version_size = 21 + (version - 1) * 4;
     const double multiplyingFactor = (version < 3)  ? 1. :
                                      (version == 3) ? 2. :
                                      3.;
@@ -2418,6 +2485,7 @@ bool QRDecode::samplingForVersion()
 
 bool QRDecode::decodingProcess()
 {
+    samplingForVersion();
 #ifdef HAVE_QUIRC
     if (straight.empty()) { return false; }
 
@@ -2454,10 +2522,21 @@ bool QRDecode::straightDecodingProcess()
 {
 #ifdef HAVE_QUIRC
     if (!updatePerspective())  { return false; }
-    if (!versionDefinition())  { return false; }
-    if (!samplingForVersion()) { return false; }
-    if (!decodingProcess())    { return false; }
-    return true;
+    //if (!versionDefinition())  { return false; }
+    if (!decodingProcess()) {
+        int it = 1;
+        const int start_version = version;
+        while (it <= 3) {
+            version = start_version+it;
+            if (version <= 40 && decodingProcess()) return true;
+            version = start_version-it;
+            if (version >=1 && decodingProcess()) return true;
+            it++;
+        }
+    }
+    else return true;
+
+    return false;
 #else
     std::cout << "Library QUIRC is not linked. No decoding is performed. Take it to the OpenCV repository." << std::endl;
     return false;
@@ -2469,7 +2548,6 @@ bool QRDecode::curvedDecodingProcess()
 #ifdef HAVE_QUIRC
     if (!preparingCurvedQRCodes()) { return false; }
     if (!versionDefinition())  { return false; }
-    if (!samplingForVersion()) { return false; }
     if (!decodingProcess())    { return false; }
     return true;
 #else
@@ -3515,7 +3593,7 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     const Point2f offset_y = (up_max_delta_point - up_right_edge_point)/7.f;
     const Point2f offset = offset_x + offset_y;
     int iter = 0;
-    int maxIter = (abs(offset.x) + abs(offset.y))*3.f; // 3 pin
+    int maxIter = 0;//(abs(offset.x) + abs(offset.y))*3.f; // 3 pin
     //const double coeff = .5;
     const int check_dist = maxIter * 4; // 12 pins
     //imwrite("test.png", bin_barcode);
