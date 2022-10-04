@@ -2279,7 +2279,7 @@ Mat QRDecode::getTransformationMatrix() {
 }
 
 double QRDecode::getNumModules(cv::Mat &warp) {
-    imwrite("test_bin_barcode.png", bin_barcode);
+    //imwrite("test_bin_barcode.png", bin_barcode);
     double numModules = -1;
     vector<vector<Point>> vertices;
     bool flag = findPatternsVerticesPoints(vertices);
@@ -2289,8 +2289,8 @@ double QRDecode::getNumModules(cv::Mat &warp) {
         for (auto& v : vertices) {
             vector<Point2f> vf = {v[0], v[1], v[2], v[3]};
             // original or bin_barcode
-            cornerSubPix(bin_barcode, vf, Size(5, 5), Size(-1, -1),
-                        TermCriteria(TermCriteria::MAX_ITER | TermCriteria::EPS, 30, 0.1));
+            //cornerSubPix(bin_barcode, vf, Size(3, 3), Size(-1, -1),
+            //            TermCriteria(TermCriteria::MAX_ITER | TermCriteria::EPS, 30, 0.1));
             perspectiveTransform(vf, vf, warp);
             const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
             for (int i = 1; i < 4; i++) {
@@ -2349,7 +2349,7 @@ bool QRDecode::updatePerspective()
     const int border = cvRound(0.1 * test_perspective_size);
     const int borderType = BORDER_CONSTANT;
     copyMakeBorder(no_border_intermediate, intermediate, border, border, border, border, borderType, Scalar(255));
-    imwrite("test_intermediate.png", no_border_intermediate);
+    //imwrite("test_intermediate.png", no_border_intermediate);
     return true;
 }
 
@@ -2433,6 +2433,15 @@ bool QRDecode::versionDefinition()
     return true;
 }
 
+static inline int getQRVersion(uint8_t bs[6]) {
+    int res = 0;
+    for (int i = 0; i < 6; i++) {
+        if (bs[i] == 0)
+            res |= 1 << i;
+    }
+    return res;
+}
+
 bool QRDecode::samplingForVersion()
 {
     CV_TRACE_FUNCTION();
@@ -2440,6 +2449,7 @@ bool QRDecode::samplingForVersion()
     const double multiplyingFactor = (version < 3)  ? 1. :
                                      (version == 3) ? 2. :
                                      3.;
+    //imwrite("no_border_intermediate.png", no_border_intermediate);
     const Size newFactorSize(
                   cvRound(no_border_intermediate.size().width  * multiplyingFactor),
                   cvRound(no_border_intermediate.size().height * multiplyingFactor));
@@ -2480,12 +2490,36 @@ bool QRDecode::samplingForVersion()
             straight.ptr<uint8_t>(i)[j] = (frequencyElem < totalFrequencyElem) ? 0 : 255;
         }
     }
+    if (version >= 7) {
+        uint8_t bs[6];
+        bs[5] = straight.at<uint8_t>(version_size - 9, 5);
+        bs[4] = straight.at<uint8_t>(version_size - 10, 5);
+        bs[3] = straight.at<uint8_t>(version_size - 11, 5);
+        bs[2] = straight.at<uint8_t>(version_size - 9, 4);
+        bs[1] = straight.at<uint8_t>(version_size - 10, 4);
+        bs[0] = straight.at<uint8_t>(version_size - 11, 4);
+        int v1 = getQRVersion(bs);
+
+        bs[5] = straight.at<uint8_t>(5, version_size - 9);
+        bs[4] = straight.at<uint8_t>(5, version_size - 10);
+        bs[3] = straight.at<uint8_t>(5, version_size - 11);
+        bs[2] = straight.at<uint8_t>(4, version_size - 9);
+        bs[1] = straight.at<uint8_t>(4, version_size - 10);
+        bs[0] = straight.at<uint8_t>(4, version_size - 11);
+        int v2 = getQRVersion(bs);
+
+        //imwrite("straight.png", straight);
+        if (v1 == version || v2 == version)
+            return true;
+        return false;
+    }
     return true;
 }
 
 bool QRDecode::decodingProcess()
 {
-    samplingForVersion();
+    if (!samplingForVersion())
+        return false;
 #ifdef HAVE_QUIRC
     if (straight.empty()) { return false; }
 
@@ -2526,10 +2560,12 @@ bool QRDecode::straightDecodingProcess()
     if (!decodingProcess()) {
         int it = 1;
         const int start_version = version;
-        while (it <= 3) {
+        while (it <= 1) {
             version = start_version+it;
+            //updatePerspective();
             if (version <= 40 && decodingProcess()) return true;
             version = start_version-it;
+            //updatePerspective();
             if (version >=1 && decodingProcess()) return true;
             it++;
         }

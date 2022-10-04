@@ -3,6 +3,7 @@
 // of this distribution and at http://opencv.org/license.html.
 
 #include "test_precomp.hpp"
+#include "opencv2/highgui.hpp"
 
 namespace opencv_test { namespace {
 
@@ -743,6 +744,7 @@ TEST(Objdetect_QRCode_decode, decode_regression_version_25)
 
     Mat src;
     cv::resize(qrImg, src, qrImg.size()*3, 1.0, 1.0, INTER_NEAREST);
+    imwrite("src.png", src);
 
     QRCodeDetector qrcode;
     std::vector<Point> corners;
@@ -766,8 +768,9 @@ TEST(Objdetect_QRCode_decode, decode_regression_version_25)
 TEST(Objdetect_QRCode_detect, detect_rotate)
 {
     //const std::string name_current_image = "version_1_down.jpg";
+    const std::string name_current_image = "image044.jpg";
     //const std::string name_current_image = "ver15_rot.jpg";
-    const std::string name_current_image = "multiple/2_qrcodes.png";
+    //const std::string name_current_image = "multiple/2_qrcodes.png";
     const std::string root = "qrcode/";
 
     std::string image_path = findDataFile(root + name_current_image);
@@ -780,6 +783,7 @@ TEST(Objdetect_QRCode_detect, detect_rotate)
     std::vector<cv::String> decoded_info;
 
     EXPECT_TRUE(qrcode.detectAndDecodeMulti(src, decoded_info, corners, straight_barcode));
+    cout << decoded_info.size() << endl;
     EXPECT_TRUE(!corners.empty());
     EXPECT_TRUE(!decoded_info.empty());
     EXPECT_TRUE(!decoded_info[0].empty());
