@@ -2275,6 +2275,15 @@ Mat QRDecode::getTransformationMatrix() {
     pts.push_back(centerPt);
 
     Mat H = findHomography(pts, perspective_points);
+    
+    vector<Point2f> vps{original_points[0], original_points[1],
+                        original_points[2], original_points[3]};
+    std::cout << vps << std::endl;
+    perspectiveTransform(vps, vps, H);
+    std::cout << vps << std::endl;
+    perspectiveTransform(vps, vps, H.inv());
+    std::cout << vps << std::endl;
+    std::cout << std::endl;
     return H;
 }
 
