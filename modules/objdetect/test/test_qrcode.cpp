@@ -768,7 +768,8 @@ TEST(Objdetect_QRCode_decode, decode_regression_version_25)
 TEST(Objdetect_QRCode_detect, detect_rotate)
 {
     //const std::string name_current_image = "version_1_down.jpg";
-    const std::string name_current_image = "image044.jpg";
+    //const std::string name_current_image = "image044.jpg";
+    const std::string name_current_image = "version_2_down.jpg";
     //const std::string name_current_image = "ver15_rot.jpg";
     //const std::string name_current_image = "multiple/2_qrcodes.png";
     const std::string root = "qrcode/";

@@ -2254,6 +2254,20 @@ bool QRDecode::preparingCurvedQRCodes()
     return true;
 }
 
+static inline vector<int> getAlignmentCoordinates(int version) {
+    if (version <= 1) return {};
+    int intervals = (version / 7) + 1;  // Number of gaps between alignment patterns
+    int distance = 4 * version + 4;  // Distance between first and last alignment pattern
+    int step = lround((double)distance / (double)intervals);  // Round equal spacing to nearest integer
+    step += step & 0b1;  // Round step to next even number
+    vector<int> coordinates;
+    coordinates = {6};  // First coordinate is always 6 (can't be calculated with step)
+    for (int i = 1; i <= intervals; i++) {
+        coordinates.push_back(6 + distance - step * (intervals - i));  // Start right/bottom and go left/up by step*k
+    }
+    return coordinates;
+}
+
 Mat QRDecode::getTransformationMatrix() {
     const Point2f centerPt = intersectionLines(original_points[0], original_points[2],
                                                original_points[1], original_points[3]);
@@ -2275,15 +2289,6 @@ Mat QRDecode::getTransformationMatrix() {
     pts.push_back(centerPt);
 
     Mat H = findHomography(pts, perspective_points);
-    
-    vector<Point2f> vps{original_points[0], original_points[1],
-                        original_points[2], original_points[3]};
-    std::cout << vps << std::endl;
-    perspectiveTransform(vps, vps, H);
-    std::cout << vps << std::endl;
-    perspectiveTransform(vps, vps, H.inv());
-    std::cout << vps << std::endl;
-    std::cout << std::endl;
     return H;
 }
 
@@ -2349,16 +2354,55 @@ bool QRDecode::updatePerspective()
     else
         return false;
 
-    Mat bin_original, temp_intermediate;
-    adaptiveThreshold(original, bin_original, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
+    Mat temp_intermediate;
     const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
-    warpPerspective(bin_original, temp_intermediate, H, temporary_size, INTER_NEAREST);
+    warpPerspective(bin_barcode, temp_intermediate, H, temporary_size, INTER_NEAREST);
+    vector<int> alignmentMarkers = getAlignmentCoordinates(version);
+    double relPos = alignmentMarkers.back()/static_cast<double>(version);
+    if (alignmentMarkers.size() > 0) {
+        Mat alignment(5, 5, CV_8UC1, Scalar(0));
+
+        alignment.at<uint8_t>(1, 1) = 255;
+        alignment.at<uint8_t>(2, 1) = 255;
+        alignment.at<uint8_t>(3, 1) = 255;
+        alignment.at<uint8_t>(1, 3) = 255;
+        alignment.at<uint8_t>(2, 3) = 255;
+        alignment.at<uint8_t>(3, 3) = 255;
+        alignment.at<uint8_t>(1, 2) = 255;
+        alignment.at<uint8_t>(3, 2) = 255;
+
+        const float module_size = test_perspective_size / version_size;
+        resize(alignment, alignment, Size(cvRound(module_size*5.f), cvRound(module_size*5.f)), 0, 0, INTER_NEAREST);
+        imwrite("alignment.png", alignment);
+
+        const float module_offset = 2.f;
+        const float left_top = module_size * (alignmentMarkers.back() - 2.f - module_offset); // add offset
+        const float offset = module_size * (5 + module_offset*2); // 5 modules in alignment marker, 4 modules in offset
+        vector<Point2f> centerAlignmentMarkers{Point2f(left_top+offset/2.f, left_top+offset/2.f)};
+        Mat subImage(temp_intermediate, Rect(left_top, left_top, offset, offset));
+        imwrite("subImage.png", subImage);
+        Mat resTemplate = Mat::zeros(subImage.size() + Size(1,1) - alignment.size(), CV_32FC1);
+        matchTemplate(subImage, alignment, resTemplate, TM_SQDIFF_NORMED);
+        double minVal; double maxVal; Point minLoc; Point maxLoc;
+        Point matchLoc;
+        minMaxLoc(resTemplate, &minVal, &maxVal, &minLoc, &maxLoc, Mat());
+        imwrite("resTemplate.png", 255*resTemplate/maxVal);
+        std::cout << resTemplate << std::endl;
+        std::cout << minLoc << std::endl;
+        std::cout << minVal << std::endl;
+        if (minVal < 0.2) {
+            Point2f alignmentCoord = (Point2f(minLoc.x + left_top, minLoc.y + left_top));
+            centerAlignmentMarkers = {alignmentCoord};
+            perspectiveTransform(centerAlignmentMarkers, centerAlignmentMarkers, H.inv());
+        }
+        std::cout << centerAlignmentMarkers << std::endl;
+    }
     no_border_intermediate = temp_intermediate(Range(1, temp_intermediate.rows), Range(1, temp_intermediate.cols));
 
     const int border = cvRound(0.1 * test_perspective_size);
     const int borderType = BORDER_CONSTANT;
     copyMakeBorder(no_border_intermediate, intermediate, border, border, border, border, borderType, Scalar(255));
-    //imwrite("test_intermediate.png", no_border_intermediate);
+    imwrite("test_board_intermediate.png", intermediate);
     return true;
 }
 
