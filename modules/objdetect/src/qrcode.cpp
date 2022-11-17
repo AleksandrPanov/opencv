@@ -990,6 +990,7 @@ public:
     bool straightDecodingProcess();
     bool curvedDecodingProcess();
 protected:
+    double getNumModules();
     bool updatePerspective();
     bool versionDefinition();
     bool samplingForVersion();
@@ -2251,6 +2252,53 @@ bool QRDecode::preparingCurvedQRCodes()
     return true;
 }
 
+/**
+ * @param vertices - 12 points of alignment markers
+ * @param original - 4 points of QR code
+ * @return pair<int, int> - vertex index in vertices, vertex index in original
+ */
+static inline std::pair<int, int> getVertIndexes(const vector<Point> &vertices, const vector<Point2f> original) {
+    float dist = normL2Sqr<float>(Point2f(vertices[0]) - original[0]);
+    int indexVert = 0;
+    int indexOrig = 0;
+
+    for (size_t i = 0ull; i < vertices.size(); i++) {
+        for (size_t j = 0ull; j < original.size(); j++) {
+            const float tmp = normL2Sqr<float>(Point2f(vertices[i]) - original[j]);
+            if (tmp < dist) {
+                dist = tmp;
+                indexVert = i;
+                indexOrig = j;
+            }
+        }
+    }
+    return std::make_pair(indexVert, indexOrig);
+}
+
+double QRDecode::getNumModules() {
+    vector<vector<Point>> vertices;
+    double numModulesX = -1., numModulesY = -1.;
+    bool flag = findPatternsVerticesPoints(vertices);
+    if (flag) {
+        vector<double> pattern_distance(4);
+        for (auto& v : vertices) {
+            auto indexes = getVertIndexes(v, original_points);
+            vector<Point2f> vf = {v[indexes.first % 4], v[(1+indexes.first) % 4], v[(2+indexes.first) % 4],
+                                  v[(3+indexes.first) % 4]};
+            for (int i = 1; i < 4; i++) {
+                pattern_distance[indexes.second] += (norm(vf[i] - vf[i-1]));
+            }
+            pattern_distance[indexes.second] += norm(vf[3] - vf[0]);
+            pattern_distance[indexes.second] /= 4.;
+        }
+        const double moduleSizeX = (pattern_distance[0] + pattern_distance[1])/(2.*7.);
+        const double moduleSizeY = (pattern_distance[0] + pattern_distance[3])/(2.*7.);
+        numModulesX = norm(original_points[1] - original_points[0])/moduleSizeX;
+        numModulesY = norm(original_points[3] - original_points[0])/moduleSizeY;
+    }
+    return (numModulesX + numModulesY)/2.;
+}
+
 bool QRDecode::updatePerspective()
 {
     CV_TRACE_FUNCTION();
@@ -2301,6 +2349,90 @@ inline Point computeOffset(const vector<Point>& v)
 bool QRDecode::versionDefinition()
 {
     CV_TRACE_FUNCTION();
+    const double numModules = getNumModules();
+    const double version_tmp = (numModules - 21.) * .25 + 1.;
+    if (abs(version_tmp - (int)version_tmp - 0.5) > 0.1 && version_tmp < 7) {
+        version = cvRound(version_tmp);
+        version_size = 0;
+        if (version >= 1 && version <= 40)
+            version_size = (version - 1) * 4 + 21;
+        else
+            return false;
+        return true;
+    }
+    else if (version_tmp >= 7) {
+        const double moduleSize = no_border_intermediate.rows / numModules;
+
+        Point2d startVersionInfo1 = Point2d((numModules-8.-3.)*moduleSize, 0.);
+        Point2d endVersionInfo1 = Point2d((numModules-8.)*moduleSize, moduleSize*6.);
+
+        Point2d startVersionInfo2 = Point2d(0., (numModules-8.-3.)*moduleSize);
+        Point2d endVersionInfo2 = Point2d(moduleSize*6., (numModules-8.)*moduleSize);
+
+        Mat v1(no_border_intermediate, Rect2d(startVersionInfo1, endVersionInfo1));
+        Mat v2(no_border_intermediate, Rect2d(startVersionInfo2, endVersionInfo2));
+        resize(v1, v1, Size(3, 6), 0., 0., INTER_NEAREST);
+        resize(v2, v2, Size(6, 3), 0., 0., INTER_NEAREST);
+        Mat version1, version2;
+        rotate((255-v1)/255, version1, ROTATE_180), rotate(((255-v2)/255).t(), version2, ROTATE_180);
+        static uint8_t versionCodes[][18] = {
+            {0,0,0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0},
+            {0,0,1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0},
+            {0,0,1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1},
+            {0,0,1,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1},
+            {0,0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,1,0},
+            {0,0,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0},
+            {0,0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,1,1},
+            {0,0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1},
+            {0,0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0,0},
+            {0,1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0,0},
+            {0,1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1},
+            {0,1,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,1},
+            {0,1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1,0},
+            {0,1,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1,0},
+            {0,1,0,1,0,1,0,1,1,0,1,0,0,0,0,0,1,1},
+            {0,1,0,1,1,0,1,0,0,0,1,1,0,0,1,0,0,1},
+            {0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,1,0,0},
+            {0,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0,0},
+            {0,1,1,0,0,1,0,0,0,1,1,1,1,0,0,0,0,1},
+            {0,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1},
+            {0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,1,1,0},
+            {0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,0},
+            {0,1,1,1,0,1,0,0,1,1,0,0,1,1,1,1,1,1},
+            {0,1,1,1,1,0,1,1,0,1,0,1,1,1,0,1,0,1},
+            {0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0,0,0},
+            {1,0,0,0,0,0,1,0,0,1,1,1,0,1,0,1,0,1},
+            {1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0,0,0},
+            {1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1,0},
+            {1,0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,1},
+            {1,0,0,1,0,0,1,0,1,1,0,0,0,0,1,0,1,1},
+            {1,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,1,0},
+            {1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1,0,0},
+            {1,0,0,1,1,1,0,1,0,1,0,1,0,0,0,0,0,1},
+            {1,0,1,0,0,0,1,1,0,0,0,1,1,0,1,0,0,1}
+        };
+        double minDist = 19.;
+        int indexMinDist = -1;
+        for (int i = 7; i < 40; i++) {
+            Mat currVers(Size(3, 6), CV_8UC1, versionCodes[i-7]);
+            double tmp = norm(currVers, version1, NORM_HAMMING);
+            if (tmp < minDist) {
+                indexMinDist = i;
+                minDist = tmp;
+            }
+            tmp = norm(currVers, version2, NORM_HAMMING);
+            if (tmp < minDist) {
+                indexMinDist = i;
+                minDist = tmp;
+            }
+        }
+        if (minDist <= 3.) { // min distance between version = 8
+            version = indexMinDist;
+            version_size = (version - 1) * 4 + 21;
+            return true;
+        }
+    }
+
     LineIterator line_iter(intermediate, Point2f(0, 0), Point2f(test_perspective_size, test_perspective_size));
     Point black_point = Point(0, 0);
     for(int j = 0; j < line_iter.count; j++, ++line_iter)
