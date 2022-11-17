@@ -2349,6 +2349,8 @@ inline Point computeOffset(const vector<Point>& v)
 bool QRDecode::versionDefinition()
 {
     CV_TRACE_FUNCTION();
+    CV_LOG_INFO(NULL, "QR corners: " << original_points[0] << " " << original_points[1] << " " << original_points[2] <<
+                      " " << original_points[3]);
     const double numModules = getNumModules();
     const double version_tmp = (numModules - 21.) * .25 + 1.;
     if (abs(version_tmp - (int)version_tmp - 0.5) > 0.1 && version_tmp < 7) {
@@ -2358,6 +2360,7 @@ bool QRDecode::versionDefinition()
             version_size = (version - 1) * 4 + 21;
         else
             return false;
+        CV_LOG_INFO(NULL, "QR version: " << (int)version);
         return true;
     }
     else if (version_tmp >= 7) {
@@ -2429,6 +2432,7 @@ bool QRDecode::versionDefinition()
         if (minDist <= 3.) { // min distance between version = 8
             version = indexMinDist;
             version_size = (version - 1) * 4 + 21;
+            CV_LOG_INFO(NULL, "QR version: " << (int)version);
             return true;
         }
     }
@@ -2493,8 +2497,6 @@ bool QRDecode::versionDefinition()
     version = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
     if ( !(  0 < version && version <= 40 ) ) { return false; }
     version_size = 21 + (version - 1) * 4;
-    CV_LOG_INFO(NULL, "QR corners: " << original_points[0] << " " << original_points[1] << " " << original_points[2] <<
-                      " " << original_points[3]);
     CV_LOG_INFO(NULL, "QR version: " << (int)version);
     return true;
 }
