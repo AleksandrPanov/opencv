@@ -2429,7 +2429,8 @@ bool QRDecode::versionDefinition()
                 minDist = tmp;
             }
         }
-        if (minDist <= 3.) { // min distance between version = 8
+        // minimum distance between version = 8
+        if (minDist <= 3. || (minDist <= 6 && abs(indexMinDist - version_tmp) < 3)) {
             version = indexMinDist;
             version_size = (version - 1) * 4 + 21;
             CV_LOG_INFO(NULL, "QR version: " << (int)version);
