@@ -2351,19 +2351,75 @@ bool QRDecode::versionDefinition()
     CV_TRACE_FUNCTION();
     CV_LOG_INFO(NULL, "QR corners: " << original_points[0] << " " << original_points[1] << " " << original_points[2] <<
                       " " << original_points[3]);
-    const double numModules = getNumModules();
+    double numModules = getNumModules();
     const double version_tmp = (numModules - 21.) * .25 + 1.;
-    if (abs(version_tmp - (int)version_tmp - 0.5) > 0.1 && version_tmp < 7) {
+    if (abs(version_tmp - cvRound(version_tmp)) < 0.16 && cvRound(version_tmp) < 7 && cvRound(version_tmp) > 0) {
         version = cvRound(version_tmp);
-        version_size = 0;
-        if (version >= 1 && version <= 40)
-            version_size = (version - 1) * 4 + 21;
-        else
-            return false;
+        version_size = (version - 1) * 4 + 21;
         CV_LOG_INFO(NULL, "QR version: " << (int)version);
         return true;
     }
-    else if (version_tmp >= 7) {
+
+    LineIterator line_iter(intermediate, Point2f(0, 0), Point2f(test_perspective_size, test_perspective_size));
+    Point black_point = Point(0, 0);
+    for(int j = 0; j < line_iter.count; j++, ++line_iter)
+    {
+        const uint8_t value = intermediate.at<uint8_t>(line_iter.pos());
+        if (value == 0)
+        {
+            black_point = line_iter.pos();
+            break;
+        }
+    }
+
+    Mat mask = Mat::zeros(intermediate.rows + 2, intermediate.cols + 2, CV_8UC1);
+    floodFill(intermediate, mask, black_point, 255, 0, Scalar(), Scalar(), FLOODFILL_MASK_ONLY);
+
+    vector<Point> locations, non_zero_elem;
+    Mat mask_roi = mask(Range(1, intermediate.rows - 1), Range(1, intermediate.cols - 1));
+    findNonZero(mask_roi, non_zero_elem);
+    convexHull(non_zero_elem, locations);
+    Point offset = computeOffset(locations);
+
+    Point temp_remote = locations[0], remote_point;
+    const Point delta_diff = offset;
+    for (size_t i = 0; i < locations.size(); i++)
+    {
+        if (norm(black_point - temp_remote) <= norm(black_point - locations[i]))
+        {
+            const uint8_t value = intermediate.at<uint8_t>(temp_remote - delta_diff);
+            temp_remote = locations[i];
+            if (value == 0) { remote_point = temp_remote - delta_diff; }
+            else { remote_point = temp_remote - (delta_diff / 2); }
+        }
+    }
+
+    size_t transition_x = 0 , transition_y = 0;
+
+    uint8_t future_pixel = 255;
+    const uint8_t *intermediate_row = intermediate.ptr<uint8_t>(remote_point.y);
+    for(int i = remote_point.x; i < intermediate.cols; i++)
+    {
+        if (intermediate_row[i] == future_pixel)
+        {
+            future_pixel = static_cast<uint8_t>(~future_pixel);
+            transition_x++;
+        }
+    }
+
+    future_pixel = 255;
+    for(int j = remote_point.y; j < intermediate.rows; j++)
+    {
+        const uint8_t value = intermediate.at<uint8_t>(Point(j, remote_point.x));
+        if (value == future_pixel)
+        {
+            future_pixel = static_cast<uint8_t>(~future_pixel);
+            transition_y++;
+        }
+    }
+    version = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
+    if (version_tmp >= 7 || version >= 7) {
+        numModules = numModules >= (21+6*4) ? numModules : 21 + (version - 1) * 4;
         const double moduleSize = no_border_intermediate.rows / numModules;
 
         Point2d startVersionInfo1 = Point2d((numModules-8.-3.)*moduleSize, 0.);
@@ -2430,72 +2486,16 @@ bool QRDecode::versionDefinition()
             }
         }
         // minimum distance between version = 8
-        if (minDist <= 3. || (minDist <= 6 && abs(indexMinDist - version_tmp) < 3)) {
+        if (minDist <= 1. || (minDist < 5. && (abs(indexMinDist - version_tmp) < 5 || abs(indexMinDist - version) < 5)))
+        {
             version = indexMinDist;
-            version_size = (version - 1) * 4 + 21;
+            version_size = 21 + (version - 1) * 4;
             CV_LOG_INFO(NULL, "QR version: " << (int)version);
             return true;
         }
+        //else return false;
     }
 
-    LineIterator line_iter(intermediate, Point2f(0, 0), Point2f(test_perspective_size, test_perspective_size));
-    Point black_point = Point(0, 0);
-    for(int j = 0; j < line_iter.count; j++, ++line_iter)
-    {
-        const uint8_t value = intermediate.at<uint8_t>(line_iter.pos());
-        if (value == 0)
-        {
-            black_point = line_iter.pos();
-            break;
-        }
-    }
-
-    Mat mask = Mat::zeros(intermediate.rows + 2, intermediate.cols + 2, CV_8UC1);
-    floodFill(intermediate, mask, black_point, 255, 0, Scalar(), Scalar(), FLOODFILL_MASK_ONLY);
-
-    vector<Point> locations, non_zero_elem;
-    Mat mask_roi = mask(Range(1, intermediate.rows - 1), Range(1, intermediate.cols - 1));
-    findNonZero(mask_roi, non_zero_elem);
-    convexHull(non_zero_elem, locations);
-    Point offset = computeOffset(locations);
-
-    Point temp_remote = locations[0], remote_point;
-    const Point delta_diff = offset;
-    for (size_t i = 0; i < locations.size(); i++)
-    {
-        if (norm(black_point - temp_remote) <= norm(black_point - locations[i]))
-        {
-            const uint8_t value = intermediate.at<uint8_t>(temp_remote - delta_diff);
-            temp_remote = locations[i];
-            if (value == 0) { remote_point = temp_remote - delta_diff; }
-            else { remote_point = temp_remote - (delta_diff / 2); }
-        }
-    }
-
-    size_t transition_x = 0 , transition_y = 0;
-
-    uint8_t future_pixel = 255;
-    const uint8_t *intermediate_row = intermediate.ptr<uint8_t>(remote_point.y);
-    for(int i = remote_point.x; i < intermediate.cols; i++)
-    {
-        if (intermediate_row[i] == future_pixel)
-        {
-            future_pixel = static_cast<uint8_t>(~future_pixel);
-            transition_x++;
-        }
-    }
-
-    future_pixel = 255;
-    for(int j = remote_point.y; j < intermediate.rows; j++)
-    {
-        const uint8_t value = intermediate.at<uint8_t>(Point(j, remote_point.x));
-        if (value == future_pixel)
-        {
-            future_pixel = static_cast<uint8_t>(~future_pixel);
-            transition_y++;
-        }
-    }
-    version = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
     if ( !(  0 < version && version <= 40 ) ) { return false; }
     version_size = 21 + (version - 1) * 4;
     CV_LOG_INFO(NULL, "QR version: " << (int)version);
