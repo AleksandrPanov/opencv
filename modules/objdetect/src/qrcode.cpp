@@ -2253,52 +2253,65 @@ bool QRDecode::preparingCurvedQRCodes()
 }
 
 /**
- * @param vertices - 12 points of alignment markers
- * @param original - 4 points of QR code
- * @return pair<int, int> - vertex index in vertices, vertex index in original
+ * @param finderPattern - 4 points of finder pattern markers, calculated by findPatternsVerticesPoints()
+ * @param cornerPointsQR - 4 corner points of QR code
+ * @return pair<int, int>, first - the index in points of finderPattern closest to the corner of the QR code,
+ *                         second - the index in points of cornerPointsQR closest to the corner of finderPattern
+ *
+ * This function matches finder patterns to the corners of the QR code. Points of finder pattern calculated by
+ * findPatternsVerticesPoints() may be erroneous, so they are checked.
  */
-static inline std::pair<int, int> getVertIndexes(const vector<Point> &vertices, const vector<Point2f> original) {
-    float distanceToOrig = normL2Sqr<float>(Point2f(vertices[0]) - original[0]);
-    int indexVert = 0;
-    int indexOrig = 0;
+static inline std::pair<int, int> matchPatternPoints(const vector<Point> &finderPattern,
+                                                    const vector<Point2f> cornerPointsQR){
+    // check that there are 4 points in the finderPattern
+    if (cornerPointsQR.size() != 4ull)
+        return std::make_pair(-1, -1);
 
+    float distanceToOrig = normL2Sqr<float>(Point2f(finderPattern[0]) - cornerPointsQR[0]);
+    int closestFinderPatternV = 0;
+    int closetOriginalV = 0;
+
+    // checking that the sides are the same size
     const float patternMaxRelativeLen = .3f;
     vector<float> sidesLen;
-    for (size_t i = 0; i < vertices.size(); i++) {
-        sidesLen.push_back(sqrt(normL2Sqr<float>(Point2f(vertices[i] - vertices[(i+1ull)%4ull]))));
+    for (size_t i = 0; i < finderPattern.size(); i++) {
+        sidesLen.push_back(sqrt(normL2Sqr<float>(Point2f(finderPattern[i] - finderPattern[(i+1ull)%4ull]))));
         if (i > 0ull && (abs(sidesLen[i]/sidesLen[i-1]) - 1.f) > patternMaxRelativeLen)
             return std::make_pair(-1, -1);
     }
 
-    for (size_t i = 0ull; i < vertices.size(); i++) {
-        for (size_t j = 0ull; j < original.size(); j++) {
-            const float tmp = normL2Sqr<float>(Point2f(vertices[i]) - original[j]);
+    for (size_t i = 0ull; i < finderPattern.size(); i++) {
+        for (size_t j = 0ull; j < cornerPointsQR.size(); j++) {
+            const float tmp = normL2Sqr<float>(Point2f(finderPattern[i]) - cornerPointsQR[j]);
             if (tmp < distanceToOrig) {
                 distanceToOrig = tmp;
-                indexVert = i;
-                indexOrig = j;
+                closestFinderPatternV = i;
+                closetOriginalV = j;
             }
         }
     }
-    const float sideLength = sqrt(normL2Sqr<float>(original[1] - original[0]));
+
+    // checking that the distance from the QR pattern to the corners of the QR code is small
+    const float originalQrSide = sqrt(normL2Sqr<float>(cornerPointsQR[1] - cornerPointsQR[0]));
     const float maxRelativeDistance = .1f;
-    if (distanceToOrig/sideLength > maxRelativeDistance)
+
+    if (distanceToOrig/originalQrSide > maxRelativeDistance)
         return std::make_pair(-1, -1);
-    return std::make_pair(indexVert, indexOrig);
+    return std::make_pair(closestFinderPatternV, closetOriginalV);
 }
 
 double QRDecode::getNumModules() {
-    vector<vector<Point>> vertices;
+    vector<vector<Point>> finderPatterns;
     double numModulesX = 0., numModulesY = 0.;
-    bool flag = findPatternsVerticesPoints(vertices);
+    bool flag = findPatternsVerticesPoints(finderPatterns);
     if (flag) {
         vector<double> pattern_distance(4);
-        for (auto& v : vertices) {
-            auto indexes = getVertIndexes(v, original_points);
+        for (auto& pattern : finderPatterns) {
+            auto indexes = matchPatternPoints(pattern, original_points);
             if (indexes == std::make_pair(-1, -1))
                 return 0.;
-            vector<Point2f> vf = {v[indexes.first % 4], v[(1+indexes.first) % 4], v[(2+indexes.first) % 4],
-                                  v[(3+indexes.first) % 4]};
+            vector<Point2f> vf = {pattern[indexes.first % 4], pattern[(1+indexes.first) % 4],
+                                  pattern[(2+indexes.first) % 4], pattern[(3+indexes.first) % 4]};
             for (int i = 1; i < 4; i++) {
                 pattern_distance[indexes.second] += (norm(vf[i] - vf[i-1]));
             }
