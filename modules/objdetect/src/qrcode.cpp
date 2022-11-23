@@ -20,6 +20,7 @@
 #include <queue>
 #include <limits>
 #include <map>
+#include <iostream>
 
 namespace cv
 {
@@ -2255,7 +2256,7 @@ bool QRDecode::preparingCurvedQRCodes()
 /**
  * @param finderPattern - 4 points of finder pattern markers, calculated by findPatternsVerticesPoints()
  * @param cornerPointsQR - 4 corner points of QR code
- * @return pair<int, int>, first - the index in points of finderPattern closest to the corner of the QR code,
+ * @return pair<int, int> first - the index in points of finderPattern closest to the corner of the QR code,
  *                         second - the index in points of cornerPointsQR closest to the corner of finderPattern
  *
  * This function matches finder patterns to the corners of the QR code. Points of finder pattern calculated by
@@ -2271,7 +2272,7 @@ static inline std::pair<int, int> matchPatternPoints(const vector<Point> &finder
     int closestFinderPatternV = 0;
     int closetOriginalV = 0;
 
-    // checking that the sides are the same size
+    // check that the sides are the same size
     const float patternMaxRelativeLen = .3f;
     vector<float> sidesLen;
     for (size_t i = 0; i < finderPattern.size(); i++) {
@@ -2291,7 +2292,7 @@ static inline std::pair<int, int> matchPatternPoints(const vector<Point> &finder
         }
     }
 
-    // checking that the distance from the QR pattern to the corners of the QR code is small
+    // check that the distance from the QR pattern to the corners of the QR code is small
     const float originalQrSide = sqrt(normL2Sqr<float>(cornerPointsQR[1] - cornerPointsQR[0]));
     const float maxRelativeDistance = .1f;
 
@@ -2373,15 +2374,75 @@ inline Point computeOffset(const vector<Point>& v)
     return offset;
 }
 
+// QR code with version 7 or higher has a special 18 bit version number code.
+// https://www.thonky.com/qr-code-tutorial/format-version-information
+// https://www.thonky.com/qr-code-tutorial/format-version-tables
+// @return std::pair<double, int> first - distance to estimatedVersion, second - version
+inline std::pair<double, int> getVersionByCode(double numModules, Mat qr, int estimatedVersion) {
+    const double moduleSize = qr.rows / numModules;
+    Point2d startVersionInfo1 = Point2d((numModules-8.-3.)*moduleSize, 0.);
+    Point2d endVersionInfo1 = Point2d((numModules-8.)*moduleSize, moduleSize*6.);
+    Point2d startVersionInfo2 = Point2d(0., (numModules-8.-3.)*moduleSize);
+    Point2d endVersionInfo2 = Point2d(moduleSize*6., (numModules-8.)*moduleSize);
+    Mat v1(qr, Rect2d(startVersionInfo1, endVersionInfo1));
+    Mat v2(qr, Rect2d(startVersionInfo2, endVersionInfo2));
+    resize(v1, v1, Size(3, 6), 0., 0., INTER_NEAREST);
+    resize(v2, v2, Size(6, 3), 0., 0., INTER_NEAREST);
+    // INTER_AREA
+    //std::cout << v1 << std::endl;
+    //std::cout << v2 << std::endl;
+
+    Mat version1, version2;
+    rotate((255-v1)/255, version1, ROTATE_180), rotate(((255-v2)/255).t(), version2, ROTATE_180);
+    static uint8_t versionCodes[][18] = {{0,0,0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0},{0,0,1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0},
+                                         {0,0,1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1},{0,0,1,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1},
+                                         {0,0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,1,0},{0,0,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0},
+                                         {0,0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,1,1},{0,0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1},
+                                         {0,0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0,0},{0,1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0,0},
+                                         {0,1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1},{0,1,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,1},
+                                         {0,1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1,0},{0,1,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1,0},
+                                         {0,1,0,1,0,1,0,1,1,0,1,0,0,0,0,0,1,1},{0,1,0,1,1,0,1,0,0,0,1,1,0,0,1,0,0,1},
+                                         {0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,1,0,0},{0,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0,0},
+                                         {0,1,1,0,0,1,0,0,0,1,1,1,1,0,0,0,0,1},{0,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1},
+                                         {0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,1,1,0},{0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,0},
+                                         {0,1,1,1,0,1,0,0,1,1,0,0,1,1,1,1,1,1},{0,1,1,1,1,0,1,1,0,1,0,1,1,1,0,1,0,1},
+                                         {0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0,0,0},{1,0,0,0,0,0,1,0,0,1,1,1,0,1,0,1,0,1},
+                                         {1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0,0,0},{1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1,0},
+                                         {1,0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,1},{1,0,0,1,0,0,1,0,1,1,0,0,0,0,1,0,1,1},
+                                         {1,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,1,0},{1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1,0,0},
+                                         {1,0,0,1,1,1,0,1,0,1,0,1,0,0,0,0,0,1},{1,0,1,0,0,0,1,1,0,0,0,1,1,0,1,0,0,1}
+    };
+    double minDist = 19.;
+    int indexMinDist = -1;
+    // minimum distance between version = 8
+    const double penaltyFactor = 0.9;
+
+    for (int i = 7; i < 40; i++) {
+        Mat currVers(Size(3, 6), CV_8UC1, versionCodes[i-7]);
+        double tmp = norm(currVers, version1, NORM_HAMMING) + penaltyFactor*abs(estimatedVersion-i);
+        if (tmp < minDist) {
+            indexMinDist = i;
+            minDist = tmp;
+        }
+        tmp = norm(currVers, version2, NORM_HAMMING) + penaltyFactor*abs(estimatedVersion-i);
+        if (tmp < minDist) {
+            indexMinDist = i;
+            minDist = tmp;
+        }
+    }
+    return std::make_pair(minDist, indexMinDist);
+}
+
 bool QRDecode::versionDefinition()
 {
     CV_TRACE_FUNCTION();
     CV_LOG_INFO(NULL, "QR corners: " << original_points[0] << " " << original_points[1] << " " << original_points[2] <<
                       " " << original_points[3]);
-    double numModules = getNumModules();
-    const double version_tmp = (numModules - 21.) * .25 + 1.;
-    if (abs(version_tmp - cvRound(version_tmp)) < 0.16 && cvRound(version_tmp) < 7 && cvRound(version_tmp) > 0) {
-        version = cvRound(version_tmp);
+    const double numModules = getNumModules();
+    const double versionByNumModules = (numModules - 21.) * .25 + 1.;
+    if (abs(versionByNumModules - cvRound(versionByNumModules)) < 0.16 && cvRound(versionByNumModules) < 7 &&
+        cvRound(versionByNumModules) > 0) {
+        version = cvRound(versionByNumModules);
         version_size = (version - 1) * 4 + 21;
         CV_LOG_INFO(NULL, "QR version: " << (int)version);
         return true;
@@ -2444,87 +2505,35 @@ bool QRDecode::versionDefinition()
             transition_y++;
         }
     }
-    version = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
-    if (version_tmp >= 7 || version >= 7) {
-        numModules = numModules >= (21+6*4) ? numModules : 21 + (version - 1) * 4;
-        const double moduleSize = no_border_intermediate.rows / numModules;
 
-        Point2d startVersionInfo1 = Point2d((numModules-8.-3.)*moduleSize, 0.);
-        Point2d endVersionInfo1 = Point2d((numModules-8.)*moduleSize, moduleSize*6.);
-
-        Point2d startVersionInfo2 = Point2d(0., (numModules-8.-3.)*moduleSize);
-        Point2d endVersionInfo2 = Point2d(moduleSize*6., (numModules-8.)*moduleSize);
-
-        Mat v1(no_border_intermediate, Rect2d(startVersionInfo1, endVersionInfo1));
-        Mat v2(no_border_intermediate, Rect2d(startVersionInfo2, endVersionInfo2));
-        resize(v1, v1, Size(3, 6), 0., 0., INTER_NEAREST);
-        resize(v2, v2, Size(6, 3), 0., 0., INTER_NEAREST);
-        Mat version1, version2;
-        rotate((255-v1)/255, version1, ROTATE_180), rotate(((255-v2)/255).t(), version2, ROTATE_180);
-        static uint8_t versionCodes[][18] = {
-            {0,0,0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0},
-            {0,0,1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0},
-            {0,0,1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1},
-            {0,0,1,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1},
-            {0,0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,1,0},
-            {0,0,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0},
-            {0,0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,1,1},
-            {0,0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1},
-            {0,0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0,0},
-            {0,1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0,0},
-            {0,1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1},
-            {0,1,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,1},
-            {0,1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1,0},
-            {0,1,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1,0},
-            {0,1,0,1,0,1,0,1,1,0,1,0,0,0,0,0,1,1},
-            {0,1,0,1,1,0,1,0,0,0,1,1,0,0,1,0,0,1},
-            {0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,1,0,0},
-            {0,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0,0},
-            {0,1,1,0,0,1,0,0,0,1,1,1,1,0,0,0,0,1},
-            {0,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1},
-            {0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,1,1,0},
-            {0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,0},
-            {0,1,1,1,0,1,0,0,1,1,0,0,1,1,1,1,1,1},
-            {0,1,1,1,1,0,1,1,0,1,0,1,1,1,0,1,0,1},
-            {0,1,1,1,1,1,0,0,1,0,0,1,0,1,0,0,0,0},
-            {1,0,0,0,0,0,1,0,0,1,1,1,0,1,0,1,0,1},
-            {1,0,0,0,0,1,0,1,1,0,1,1,1,1,0,0,0,0},
-            {1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1,0},
-            {1,0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,1},
-            {1,0,0,1,0,0,1,0,1,1,0,0,0,0,1,0,1,1},
-            {1,0,0,1,0,1,0,1,0,0,0,0,1,0,1,1,1,0},
-            {1,0,0,1,1,0,1,0,1,0,0,1,1,0,0,1,0,0},
-            {1,0,0,1,1,1,0,1,0,1,0,1,0,0,0,0,0,1},
-            {1,0,1,0,0,0,1,1,0,0,0,1,1,0,1,0,0,1}
-        };
-        double minDist = 19.;
-        int indexMinDist = -1;
-        for (int i = 7; i < 40; i++) {
-            Mat currVers(Size(3, 6), CV_8UC1, versionCodes[i-7]);
-            double tmp = norm(currVers, version1, NORM_HAMMING);
-            if (tmp < minDist) {
-                indexMinDist = i;
-                minDist = tmp;
-            }
-            tmp = norm(currVers, version2, NORM_HAMMING);
-            if (tmp < minDist) {
-                indexMinDist = i;
-                minDist = tmp;
-            }
+    const int versionByTransition = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
+    const int numModulesByTransition = 21 + (versionByTransition - 1) * 4;
+    if (cvRound(versionByNumModules) >= 7 || versionByTransition >= 7) {
+        vector<std::pair<double, int>> versionAndDistances;
+        if (cvRound(versionByNumModules) >= 7) {
+            versionAndDistances.push_back(getVersionByCode(numModules, no_border_intermediate,
+                                                           cvRound(versionByNumModules)));
         }
+        if (versionByTransition >= 7) {
+            versionAndDistances.push_back(getVersionByCode(numModulesByTransition, no_border_intermediate,
+                                                           versionByTransition));
+        }
+        std::sort(versionAndDistances.begin(), versionAndDistances.end());
+
+        const double minDist = versionAndDistances.front().first;
+        const int indexMinDist = versionAndDistances.front().second;
         // minimum distance between version = 8
-        if (minDist <= 1. || (minDist < 5. && (abs(indexMinDist - version_tmp) < 5 || abs(indexMinDist - version) < 5)))
-        {
+        //if (minDist <= 1. || (minDist < 5. && (abs(indexMinDist - versionByNumModules) < 5 || abs(indexMinDist - versionByTransition) < 5))) {
+        if (minDist < 5.) {
             version = indexMinDist;
             version_size = 21 + (version - 1) * 4;
             CV_LOG_INFO(NULL, "QR version: " << (int)version);
             return true;
         }
-        //else return false;
     }
-
+    version = versionByTransition;
+    version_size = numModulesByTransition;
     if ( !(  0 < version && version <= 40 ) ) { return false; }
-    version_size = 21 + (version - 1) * 4;
     CV_LOG_INFO(NULL, "QR version: " << (int)version);
     return true;
 }
