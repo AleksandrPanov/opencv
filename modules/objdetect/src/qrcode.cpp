@@ -2415,7 +2415,7 @@ inline std::pair<double, int> getVersionByCode(double numModules, Mat qr, int es
     double minDist = 19.;
     int indexMinDist = -1;
     // minimum distance between version = 8
-    const double penaltyFactor = 0.9;
+    const double penaltyFactor = 0.8;
 
     for (int i = 7; i < 40; i++) {
         Mat currVers(Size(3, 6), CV_8UC1, versionCodes[i-7]);
@@ -2496,30 +2496,44 @@ bool QRDecode::versionDefinition()
         }
     }
 
+    enum probableEstimate {
+        Min,
+        VeryLow,
+        Low,
+        Medium,
+        High,
+        VeryHigh
+    };
+
     const int versionByTransition = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
     const int numModulesByTransition = 21 + (versionByTransition - 1) * 4;
-    double distanceByTransition = versionByTransition; // best work with small versions (1-6)
-    if (transition_x == transition_y) // the reliability of the estimate is higher in this case
-        distanceByTransition *= 0.5;
+    probableEstimate useTransition = VeryLow;
+    // best work with version 1-6
+    if (versionByTransition <= 6) {
+        useTransition = Low;
+        if (transition_x == transition_y) {
+            useTransition = Medium;
+        }
+    }
 
     const double numModulesByFinderPattern = getNumModules();
     const double versionByFinderPattern = (numModulesByFinderPattern - 21.) * .25 + 1.;
-    double distanceByFinderPattern = versionByFinderPattern*0.5; // best work with small versions (1-6)
-    distanceByFinderPattern += abs(versionByFinderPattern - cvRound(versionByFinderPattern))*versionByFinderPattern;
-    if (cvRound(versionByFinderPattern) < 1)
-        distanceByFinderPattern = 41;
+    probableEstimate useFinderPattern = Min;
+    if (cvRound(versionByFinderPattern) >= 1 && versionByFinderPattern <= 6) {
+        useFinderPattern = VeryLow;
+        double roundingError = abs(numModulesByFinderPattern - cvRound(numModulesByFinderPattern));
+        if ((cvRound(versionByFinderPattern) < 5 && roundingError < 0.2) || (cvRound(versionByFinderPattern) >= 5 &&
+                                                                             roundingError < 0.16)) {
+            useFinderPattern = High;
+        }
+        else if (cvRound(versionByFinderPattern) >= 7 && versionByTransition >= 6) {
+            useFinderPattern = VeryLow;
+        }
+    }
 
-    /*if (abs(versionByNumModules - cvRound(versionByNumModules)) < 0.16 && cvRound(versionByNumModules) < 7 &&
-        cvRound(versionByNumModules) > 0) {
-        version = cvRound(versionByNumModules);
-        version_size = (version - 1) * 4 + 21;
-        CV_LOG_INFO(NULL, "QR version: " << (int)version);
-        return true;
-    }*/
-
-    double distanceByCode = 41.;
+    probableEstimate useCode = Min;
     int versionByCode = 7;
-    if (cvRound(versionByFinderPattern) >= 7 || versionByTransition >= 7) {
+    if ((cvRound(versionByFinderPattern) >= 7 && useFinderPattern > Min) || versionByTransition >= 7) {
         vector<std::pair<double, int>> versionAndDistances;
         if (cvRound(versionByFinderPattern) >= 7) {
             versionAndDistances.push_back(getVersionByCode(numModulesByFinderPattern, no_border_intermediate,
@@ -2531,34 +2545,27 @@ bool QRDecode::versionDefinition()
         }
         std::sort(versionAndDistances.begin(), versionAndDistances.end());
 
-        distanceByCode = versionAndDistances.front().first;
+        double distanceByCode = versionAndDistances.front().first;
         versionByCode = versionAndDistances.front().second;
-        // minimum distance between version = 8
-        //if (minDist <= 1. || (minDist < 5. && (abs(indexMinDist - versionByNumModules) < 5 || abs(indexMinDist - versionByTransition) < 5))) {
-        /*if (distanceByCode < 5.) {
-            version = indexMinDist;
-            version_size = 21 + (version - 1) * 4;
-            CV_LOG_INFO(NULL, "QR version: " << (int)version);
-            return true;
-        }*/
+        if (distanceByCode < 5.) {
+            useCode = VeryHigh;
+        }
     }
-    if (distanceByCode <= distanceByFinderPattern && distanceByCode <= distanceByTransition) {
-        CV_LOG_INFO(NULL, "Best distance distanceByCode: " << distanceByCode);
+
+    if (useCode > useFinderPattern && useCode > useTransition) {
+        CV_LOG_INFO(NULL, "Best useCode: " << (int)useCode);
         version = versionByCode;
     }
-    else if (distanceByFinderPattern <= distanceByCode && distanceByFinderPattern <= distanceByTransition) {
-        CV_LOG_INFO(NULL, "Best distance distanceByFinderPattern: " << distanceByFinderPattern);
+    else if (useFinderPattern > useTransition && useFinderPattern > useCode) {
+        CV_LOG_INFO(NULL, "Best useFinderPattern: " << (int)useFinderPattern);
         version = cvRound(versionByFinderPattern);
     }
     else {
-        CV_LOG_INFO(NULL, "Best distance distanceByTransition: " << distanceByTransition);
+        CV_LOG_INFO(NULL, "Best useTransition: " << (int)useTransition);
         version = versionByTransition;
     }
     version_size = 21 + (version - 1) * 4;
-
-    /*version = versionByTransition;
-    version_size = numModulesByTransition;*/
-    if ( !(  0 < version && version <= 40 ) ) { return false; }
+    if ( !(0 < version && version <= 40) ) { return false; }
     CV_LOG_INFO(NULL, "QR version: " << (int)version);
     return true;
 }
