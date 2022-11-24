@@ -2414,11 +2414,11 @@ inline std::pair<double, int> getVersionByCode(double numModules, Mat qr, int es
     };
     double minDist = 19.;
     int indexMinDist = -1;
-    // minimum distance between version = 8
-    const double penaltyFactor = 0.8;
+    const double penaltyFactor = 0.5;//0.8;
 
     for (int i = 7; i < 40; i++) {
         Mat currVers(Size(3, 6), CV_8UC1, versionCodes[i-7]);
+        // minimum hamming distance between version = 8
         double tmp = norm(currVers, version1, NORM_HAMMING) + penaltyFactor*abs(estimatedVersion-i);
         if (tmp < minDist) {
             indexMinDist = i;
@@ -2496,44 +2496,22 @@ bool QRDecode::versionDefinition()
         }
     }
 
-    enum probableEstimate {
-        Min,
-        VeryLow,
-        Low,
-        Medium,
-        High,
-        VeryHigh
-    };
-
     const int versionByTransition = saturate_cast<uint8_t>((std::min(transition_x, transition_y) - 1) * 0.25 - 1);
     const int numModulesByTransition = 21 + (versionByTransition - 1) * 4;
-    probableEstimate useTransition = VeryLow;
-    // best work with version 1-6
-    if (versionByTransition <= 6) {
-        useTransition = Low;
-        if (transition_x == transition_y) {
-            useTransition = Medium;
-        }
-    }
 
     const double numModulesByFinderPattern = getNumModules();
     const double versionByFinderPattern = (numModulesByFinderPattern - 21.) * .25 + 1.;
-    probableEstimate useFinderPattern = Min;
-    if (cvRound(versionByFinderPattern) >= 1 && versionByFinderPattern <= 6) {
-        useFinderPattern = VeryLow;
-        double roundingError = abs(numModulesByFinderPattern - cvRound(numModulesByFinderPattern));
-        if ((cvRound(versionByFinderPattern) < 5 && roundingError < 0.2) || (cvRound(versionByFinderPattern) >= 5 &&
-                                                                             roundingError < 0.16)) {
-            useFinderPattern = High;
-        }
-        else if (cvRound(versionByFinderPattern) >= 7 && versionByTransition >= 6) {
-            useFinderPattern = VeryLow;
-        }
+    bool useFinderPattern = false;
+    const double thresholdFinderPattern = 0.19;
+    const double roundingError = abs(numModulesByFinderPattern - cvRound(numModulesByFinderPattern));
+    if (cvRound(versionByFinderPattern) >= 1 && versionByFinderPattern <= 6 && transition_x != transition_y) {
+        if (roundingError < thresholdFinderPattern)
+            useFinderPattern = true;
     }
 
-    probableEstimate useCode = Min;
+    bool useCode = false;
     int versionByCode = 7;
-    if ((cvRound(versionByFinderPattern) >= 7 && useFinderPattern > Min) || versionByTransition >= 7) {
+    if (cvRound(versionByFinderPattern) >= 7 || versionByTransition >= 7) {
         vector<std::pair<double, int>> versionAndDistances;
         if (cvRound(versionByFinderPattern) >= 7) {
             versionAndDistances.push_back(getVersionByCode(numModulesByFinderPattern, no_border_intermediate,
@@ -2548,20 +2526,20 @@ bool QRDecode::versionDefinition()
         double distanceByCode = versionAndDistances.front().first;
         versionByCode = versionAndDistances.front().second;
         if (distanceByCode < 5.) {
-            useCode = VeryHigh;
+            useCode = true;
         }
     }
 
-    if (useCode > useFinderPattern && useCode > useTransition) {
-        CV_LOG_INFO(NULL, "Best useCode: " << (int)useCode);
+    if (useCode) {
+        CV_LOG_INFO(NULL, "Version type: useCode");
         version = versionByCode;
     }
-    else if (useFinderPattern > useTransition && useFinderPattern > useCode) {
-        CV_LOG_INFO(NULL, "Best useFinderPattern: " << (int)useFinderPattern);
+    else if (useFinderPattern ) {
+        CV_LOG_INFO(NULL, "Version type: useFinderPattern");
         version = cvRound(versionByFinderPattern);
     }
     else {
-        CV_LOG_INFO(NULL, "Best useTransition: " << (int)useTransition);
+        CV_LOG_INFO(NULL, "Version type: useTransition");
         version = versionByTransition;
     }
     version_size = 21 + (version - 1) * 4;
