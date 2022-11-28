@@ -8,7 +8,7 @@
 #include "precomp.hpp"
 #include "opencv2/objdetect.hpp"
 #include "opencv2/calib3d.hpp"
-#include "opencv2/highgui.hpp"
+//#include "opencv2/highgui.hpp"
 #include <opencv2/core/utils/logger.hpp>
 #include <iostream>
 
@@ -2456,8 +2456,8 @@ static inline std::pair<double, int> getVersionByCode(double numModules, Mat qr,
     double minDist = 19.;
     int bestVersion = -1;
     const double penaltyFactor = 0.8;
-    imwrite("version1.png", version1);
-    imwrite("version2.png", version2);
+    //imwrite("version1.png", version1);
+    //imwrite("version2.png", version2);
 
     for (int i = 0; i < (int)(sizeof(versionCodes)/sizeof(versionCodes[0])); i++) {
         Mat currVers(Size(3, 6), CV_8UC1, versionCodes[i]);
@@ -2625,7 +2625,7 @@ bool QRDecode::versionDefinition()
             alignment_coords = {alignmentCoord};
             perspectiveTransform(alignment_coords, alignment_coords, homography.inv());
             std::cout << alignment_coords << std::endl; // coeff_expansion
-            imwrite("bin_bacrode.png", bin_barcode);
+            //imwrite("bin_bacrode.png", bin_barcode);
             const double relativePos = alignmentMarkers.back()/static_cast<double>(test_perspective_size);
             std::cout << relativePos << std::endl; // relativePos
         }
