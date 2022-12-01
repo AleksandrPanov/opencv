@@ -8,7 +8,9 @@
 #include "precomp.hpp"
 #include "opencv2/objdetect.hpp"
 #include "opencv2/calib3d.hpp"
+//#include "opencv2/highgui.hpp"
 #include <opencv2/core/utils/logger.hpp>
+#include <iostream>
 
 #ifdef HAVE_QUIRC
 #include "quirc.h"
@@ -18,6 +20,7 @@
 #include <cmath>
 #include <queue>
 #include <limits>
+#include <iostream>
 #include <map>
 
 namespace cv
@@ -988,10 +991,25 @@ public:
     std::string getDecodeInformation() { return result_info; }
     bool straightDecodingProcess();
     bool curvedDecodingProcess();
+    vector<Point2f> alignment_coords;
 protected:
     double getNumModules();
-    bool updatePerspective();
+    Mat getHomography() {
+        CV_TRACE_FUNCTION();
+        const Point2f centerPt = intersectionLines(original_points[0], original_points[2],
+                                               original_points[1], original_points[3]);
+        if (cvIsNaN(centerPt.x) || cvIsNaN(centerPt.y))
+            return Mat();
+
+        vector<Point2f> perspective_points = {{0.f, 0.f}, {test_perspective_size, 0.f},
+                                              {test_perspective_size, test_perspective_size},
+                                              {0.f, test_perspective_size}};
+        vector<Point2f> pts = original_points;
+        return findHomography(pts, perspective_points);
+    }
+    bool updatePerspective(const Mat& H);
     bool versionDefinition();
+    void detectAlignment();
     bool samplingForVersion();
     bool decodingProcess();
     inline double pointPosition(Point2f a, Point2f b , Point2f c);
@@ -1020,6 +1038,7 @@ protected:
     const static int NUM_SIDES = 2;
     Mat original, bin_barcode, no_border_intermediate, intermediate, straight, curved_to_straight, test_image;
     vector<Point2f> original_points;
+    Mat homography;
     vector<Point2f> original_curved_points;
     vector<Point> qrcode_locations;
     vector<std::pair<size_t, Point> > closest_points;
@@ -2299,6 +2318,7 @@ static inline std::pair<int, int> matchPatternPoints(const vector<Point> &finder
             }
         }
     }
+    distanceToOrig = sqrt(distanceToOrig);
 
     // check that the distance from the QR pattern to the corners of the QR code is small
     const float originalQrSide = sqrt(normL2Sqr<float>(cornerPointsQR[0] - cornerPointsQR[1]))*0.5f +
@@ -2315,7 +2335,7 @@ double QRDecode::getNumModules() {
     double numModulesX = 0., numModulesY = 0.;
     bool flag = findPatternsVerticesPoints(finderPatterns);
     if (flag) {
-        vector<double> pattern_distance(4);
+        double pattern_distance[4];
         for (auto& pattern : finderPatterns) {
             auto indexes = matchPatternPoints(pattern, original_points);
             if (indexes == std::make_pair(-1, -1))
@@ -2336,30 +2356,28 @@ double QRDecode::getNumModules() {
     return (numModulesX + numModulesY)/2.;
 }
 
-bool QRDecode::updatePerspective()
+static inline vector<int> getAlignmentCoordinates(int version) {
+    if (version <= 1) return {};
+    int intervals = (version / 7) + 1;  // Number of gaps between alignment patterns
+    int distance = 4 * version + 4;  // Distance between first and last alignment pattern
+    int step = lround((double)distance / (double)intervals);  // Round equal spacing to nearest integer
+    step += step & 0b1;  // Round step to next even number
+    vector<int> coordinates;
+    coordinates = {6};  // First coordinate is always 6 (can't be calculated with step)
+    for (int i = 1; i <= intervals; i++) {
+        coordinates.push_back(6 + distance - step * (intervals - i));  // Start right/bottom and go left/up by step*k
+    }
+    return coordinates;
+}
+
+
+bool QRDecode::updatePerspective(const Mat& H)
 {
-    CV_TRACE_FUNCTION();
-    const Point2f centerPt = intersectionLines(original_points[0], original_points[2],
-                                               original_points[1], original_points[3]);
-    if (cvIsNaN(centerPt.x) || cvIsNaN(centerPt.y))
+    if (H.empty())
         return false;
-
-    const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
-
-    vector<Point2f> perspective_points;
-    perspective_points.push_back(Point2f(0.f, 0.f));
-    perspective_points.push_back(Point2f(test_perspective_size, 0.f));
-
-    perspective_points.push_back(Point2f(test_perspective_size, test_perspective_size));
-    perspective_points.push_back(Point2f(0.f, test_perspective_size));
-
-    perspective_points.push_back(Point2f(test_perspective_size * 0.5f, test_perspective_size * 0.5f));
-
-    vector<Point2f> pts = original_points;
-    pts.push_back(centerPt);
-
-    Mat H = findHomography(pts, perspective_points);
+    homography = H;
     Mat temp_intermediate;
+    const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
     warpPerspective(bin_barcode, temp_intermediate, H, temporary_size, INTER_NEAREST);
     no_border_intermediate = temp_intermediate(Range(1, temp_intermediate.rows), Range(1, temp_intermediate.cols));
 
@@ -2566,6 +2584,68 @@ bool QRDecode::versionDefinition()
     return true;
 }
 
+void QRDecode::detectAlignment() {
+    vector<int> alignmentMarkers = getAlignmentCoordinates(version);
+    if (alignmentMarkers.size() > 0) {
+        // create alignment image
+        static uint8_t alignmentMarker[25] = {
+            0, 0,   0,   0,   0,
+            0, 255, 255, 255, 0,
+            0, 255, 0,   255, 0,
+            0, 255, 255, 255, 0,
+            0, 0,   0,    0,  0
+        };
+        Mat resizedAlignmentMarker(5, 5, CV_8UC1, alignmentMarker);
+        const float module_size = test_perspective_size / version_size;
+        resize(resizedAlignmentMarker, resizedAlignmentMarker,
+               Size(cvRound(module_size * 5.f), cvRound(module_size * 5.f)), 0, 0, INTER_AREA);
+
+        const float module_offset = 2.f; // 2.f
+        const float left_top = module_size * (alignmentMarkers.back() - 2.f - module_offset); // add offset
+        const float offset = module_size * (5 + module_offset * 2); // 5 modules in alignment marker, 4 modules in offset
+        //vector<Point2f> centerAlignmentMarkers{Point2f(left_top + offset / 2.f, left_top + offset / 2.f)};
+        // cvRound?
+        Mat subImage(no_border_intermediate, Rect(left_top, left_top, offset, offset));
+        //imwrite("subImage.png", subImage);
+        Mat resTemplate = Mat::zeros(subImage.size() + Size(1, 1) - resizedAlignmentMarker.size(), CV_32FC1);
+        matchTemplate(subImage, resizedAlignmentMarker, resTemplate, TM_SQDIFF_NORMED);
+        double minVal = 0., maxVal = 0.;
+        Point minLoc, maxLoc, matchLoc;
+        minMaxLoc(resTemplate, &minVal, &maxVal, &minLoc, &maxLoc);
+        //std::cout << minVal << std::endl;
+        //imwrite("resTemplate.png", 255 * resTemplate / maxVal);
+        CV_LOG_INFO(NULL, "Alignment minVal: " << minVal);
+        if (minVal < 0.37) {
+            const float templateOffset = static_cast<float>(resizedAlignmentMarker.size().width)/2.f+1.f;
+            Point2f alignmentCoord = (Point2f(minLoc.x + left_top + templateOffset, minLoc.y + left_top + templateOffset));
+            alignment_coords = {alignmentCoord};
+            perspectiveTransform(alignment_coords, alignment_coords, homography.inv());
+            CV_LOG_INFO(NULL, "Alignment coords: " << alignment_coords);
+
+            //std::cout << alignment_coords << std::endl; // coeff_expansion
+            //imwrite("bin_bacrode.png", bin_barcode);
+            const double relativePos = (alignmentMarkers.back()+0.5)/version_size;
+            //std::cout << relativePos << std::endl; // relativePos
+
+            //imwrite("bin_bacrode.png", bin_barcode);
+            const Size temporary_size(cvRound(test_perspective_size), cvRound(test_perspective_size));
+            vector<Point2f> perspective_points;
+            perspective_points.push_back(Point2f(0.f, 0.f));
+            perspective_points.push_back(Point2f(test_perspective_size, 0.f));
+
+            perspective_points.push_back(Point2f(0.f, test_perspective_size));
+            Point2f tmp = Point2f(relativePos*test_perspective_size, relativePos*test_perspective_size);
+            perspective_points.push_back(tmp);
+            //imshow("test", bin_barcode);
+            //waitKey(0);
+
+            vector<Point2f> pts = {original_points[0], original_points[1], original_points[3], alignment_coords[0]};
+            Mat H = findHomography(pts, perspective_points);
+            updatePerspective(H);
+        }
+    }
+}
+
 bool QRDecode::samplingForVersion()
 {
     CV_TRACE_FUNCTION();
@@ -2652,8 +2732,9 @@ bool QRDecode::decodingProcess()
 bool QRDecode::straightDecodingProcess()
 {
 #ifdef HAVE_QUIRC
-    if (!updatePerspective())  { return false; }
+    if (!updatePerspective(getHomography()))  { return false; }
     if (!versionDefinition())  { return false; }
+    detectAlignment();
     if (!samplingForVersion()) { return false; }
     if (!decodingProcess())    { return false; }
     return true;
@@ -3769,6 +3850,7 @@ public:
                 {
                     decoded_info[i] = qrdec[i].getDecodeInformation();
                     straight_barcode[i] = qrdec[i].getStraightBarcode();
+                    //std::cout << qrdec[i].alignment_coords[0] * coeff_expansion << std::endl; // coeff_expansion
                 }
             }
             if (decoded_info[i].empty())
