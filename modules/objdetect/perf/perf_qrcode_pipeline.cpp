@@ -121,7 +121,7 @@ PERF_TEST_P_(Perf_Objdetect_QRCode_Multi, decodeMulti)
 INSTANTIATE_TEST_CASE_P(/*nothing*/, Perf_Objdetect_QRCode,
     ::testing::Values(
         "version_1_down.jpg", "version_1_left.jpg", "version_1_right.jpg", "version_1_up.jpg", "version_1_top.jpg",
-        "version_5_down.jpg", "version_5_left.jpg",/*version_5_right.jpg*/ "version_5_up.jpg", "version_5_top.jpg",
+        "version_5_down.jpg", "version_5_left.jpg", /*version_5_right.jpg,*/ "version_5_up.jpg", "version_5_top.jpg",
         "russian.jpg", "kanji.jpg", "link_github_ocv.jpg", "link_ocv.jpg", "link_wiki_cv.jpg"
     )
 );
@@ -129,9 +129,10 @@ INSTANTIATE_TEST_CASE_P(/*nothing*/, Perf_Objdetect_QRCode,
 
 INSTANTIATE_TEST_CASE_P(/*nothing*/, Perf_Objdetect_QRCode_Multi,
     ::testing::Values(
-      "2_qrcodes.png", "3_close_qrcodes.png", "3_qrcodes.png", "4_qrcodes.png",
-      "5_qrcodes.png", "6_qrcodes.png", "7_qrcodes.png", "8_close_qrcodes.png"
+      "2_qrcodes.png", /*"3_close_qrcodes.png",*/ "3_qrcodes.png", //"4_qrcodes.png",
+      "5_qrcodes.png", "6_qrcodes.png", "7_qrcodes.png"//, "8_close_qrcodes.png"
     )
+// 4_qrcodes.png", 3_close_qrcodes, 8_close_qrcodes.png DISABLED after PR #22891
 );
 
 typedef ::perf::TestBaseWithParam< tuple< std::string, Size > > Perf_Objdetect_Not_QRCode;

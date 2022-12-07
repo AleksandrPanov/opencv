@@ -29,9 +29,11 @@ std::string qrcode_images_curved[] = {
 };
 // curved_4.jpg, curved_6.jpg DISABLED after tile fix, PR #22025
 std::string qrcode_images_multiple[] = {
-  "2_qrcodes.png", "3_close_qrcodes.png", "3_qrcodes.png", "4_qrcodes.png",
+  "2_qrcodes.png", /*"3_close_qrcodes.png",*/ "3_qrcodes.png", /*"4_qrcodes.png",*/
   "5_qrcodes.png", "6_qrcodes.png", "7_qrcodes.png", "8_close_qrcodes.png"
 };
+// 3_close_qrcodes.png, 4_qrcodes.png DISABLED after PR #22891
+
 //#define UPDATE_QRCODE_TEST_DATA
 #ifdef  UPDATE_QRCODE_TEST_DATA
 

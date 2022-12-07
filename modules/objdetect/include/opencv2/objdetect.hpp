@@ -835,6 +835,7 @@ public:
             OutputArrayOfArrays straight_qrcode = noArray()
     ) const;
 
+    CV_WRAP std::vector<std::vector<Point2f> > getQRCorners();
 protected:
     struct Impl;
     Ptr<Impl> p;
