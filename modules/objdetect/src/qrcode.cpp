@@ -2302,7 +2302,7 @@ static inline bool checkFinderPatternByAspect(const vector<Point> &finderPattern
  * findPatternsVerticesPoints() may be erroneous, so they are checked.
  */
 static inline std::pair<int, int> matchPatternPoints(const vector<Point> &finderPattern,
-                                                     const vector<Point2f> cornerPointsQR) {
+                                                     const vector<Point2f>& cornerPointsQR) {
     if (!checkFinderPatternByAspect(finderPattern))
         return std::make_pair(-1, -1);
 
@@ -2599,8 +2599,7 @@ bool QRDecode::versionDefinition()
 void QRDecode::detectAlignment() {
     vector<pair<int, int>> alignmentPositions = getAlignmentCoordinates(version);
     if (alignmentPositions.size() > 0) {
-        vector<Point2f> perspective_points = {{0.f, 0.f}, {test_perspective_size, 0.f},
-                                              {0.f, test_perspective_size}};
+        vector<Point2f> perspective_points = {{0.f, 0.f}, {test_perspective_size, 0.f}, {0.f, test_perspective_size}};
         vector<Point2f> object_points = {original_points[0], original_points[1], original_points[3]};
 
         // create alignment image
@@ -2611,9 +2610,10 @@ void QRDecode::detectAlignment() {
             0, 255, 255, 255, 0,
             0, 0,   0,   0,   0
         };
-        Mat resizedAlignmentMarker(5, 5, CV_8UC1, alignmentMarker);
+        Mat alignmentMarkerMat(5, 5, CV_8UC1, alignmentMarker);
         const float module_size = test_perspective_size / version_size;
-        resize(resizedAlignmentMarker, resizedAlignmentMarker,
+        Mat resizedAlignmentMarker;
+        resize(alignmentMarkerMat, resizedAlignmentMarker,
                Size(cvRound(module_size * 5.f), cvRound(module_size * 5.f)), 0, 0, INTER_AREA);
         const float module_offset = 1.9f;
         const float offset = (module_size * (5 + module_offset * 2)); // 5 modules in alignment marker, 2 x module_offset modules in offset
@@ -2622,15 +2622,13 @@ void QRDecode::detectAlignment() {
             const float left_top_y = (module_size * (alignmentPos.second - 2.f - module_offset)); // add offset
             Mat subImage(no_border_intermediate, Rect(cvRound(left_top_x), cvRound(left_top_y), cvRound(offset), cvRound(offset)));
             Mat resTemplate;
-            matchTemplate(subImage, resizedAlignmentMarker, resTemplate, TM_CCOEFF_NORMED); // TM_SQDIFF_NORMED TM_CCOEFF_NORMED
+            matchTemplate(subImage, resizedAlignmentMarker, resTemplate, TM_CCOEFF_NORMED);
             double minVal = 0., maxVal = 0.;
             Point minLoc, maxLoc, matchLoc;
             minMaxLoc(resTemplate, &minVal, &maxVal, &minLoc, &maxLoc);
-            //CV_LOG_INFO(NULL, "Alignment minVal: " << minVal);
             CV_LOG_INFO(NULL, "Alignment maxVal: " << maxVal);
-            if (maxVal > 0.63) { // minVal < 0.37 maxVal > 0.63
+            if (maxVal > 0.65) {
                 const float templateOffset = static_cast<float>(resizedAlignmentMarker.size().width) / 2.f;
-                //Point2f alignmentCoord(Point2f(minLoc.x + left_top + templateOffset, minLoc.y + left_top + templateOffset));
                 Point2f alignmentCoord(Point2f(maxLoc.x + left_top_x + templateOffset, maxLoc.y + left_top_y + templateOffset));
                 alignment_coords.push_back(alignmentCoord);
                 perspectiveTransform(alignment_coords, alignment_coords, homography.inv());
@@ -2642,7 +2640,7 @@ void QRDecode::detectAlignment() {
             }
         }
         if (object_points.size() > 3ull) {
-            Mat H = findHomography(object_points, perspective_points, RANSAC, 12.);
+            Mat H = findHomography(object_points, perspective_points, RANSAC, 10.);
             if (H.empty())
                 return;
             updatePerspective(H);

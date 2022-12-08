@@ -762,6 +762,26 @@ TEST(Objdetect_QRCode_decode, decode_regression_version_25)
 #endif
 }
 
+TEST(Objdetect_QRCode_decodeMulti, decode_9_qrcodes_version7)
+{
+    const std::string name_current_image = "9_qrcodes_version7.jpg";
+    const std::string root = "qrcode/multiple/";
+
+    std::string image_path = findDataFile(root + name_current_image);
+    Mat src = imread(image_path);
+    QRCodeDetector qrcode;
+    std::vector<Point> corners;
+    std::vector<cv::String> decoded_info;
+
+    std::vector<Mat1b> straight_barcode;
+    qrcode.detectAndDecodeMulti(src, decoded_info, corners, straight_barcode);
+    EXPECT_EQ(decoded_info.size(), 9ull);
+    const string gold_info = "I love OpenCV, QR Code version = 7, error correction = level Quartile";
+    for (const auto& info : decoded_info) {
+        EXPECT_EQ(info, gold_info);
+    }
+}
+
 #endif // UPDATE_QRCODE_TEST_DATA
 
 }} // namespace
