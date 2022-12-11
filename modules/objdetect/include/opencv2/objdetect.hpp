@@ -743,11 +743,19 @@ public:
 
 };
 
+struct CV_EXPORTS_W_SIMPLE QRCodeDetectorParameters {
+    QRCodeDetectorParameters();
+    CV_PROP_RW bool useAlignmentMarkers; // use markers to improve the position of the corners of the QR code
+};
+
 class CV_EXPORTS_W QRCodeDetector
 {
 public:
-    CV_WRAP QRCodeDetector();
+    CV_WRAP QRCodeDetector(const QRCodeDetectorParameters& detectorParameters = QRCodeDetectorParameters());
     ~QRCodeDetector();
+
+    CV_WRAP QRCodeDetectorParameters& getDetectorParameters();
+    const QRCodeDetectorParameters& getDetectorParameters() const;
 
     /** @brief sets the epsilon used during the horizontal scan of QR code stop marker detection.
      @param epsX Epsilon neighborhood, which allows you to determine the horizontal pattern
@@ -835,7 +843,6 @@ public:
             OutputArrayOfArrays straight_qrcode = noArray()
     ) const;
 
-    CV_WRAP std::vector<std::vector<Point2f> > getQRCorners();
 protected:
     struct Impl;
     Ptr<Impl> p;
