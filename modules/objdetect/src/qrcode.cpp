@@ -967,6 +967,8 @@ public:
     QRCodeDetectorParameters detectorParameters;
 };
 
+QRCodeDetector::QRCodeDetector() : p(new Impl) {}
+
 QRCodeDetector::QRCodeDetector(const QRCodeDetectorParameters& _detectorParameters) : p(new Impl) {
     p->detectorParameters = _detectorParameters;
 }

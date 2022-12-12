@@ -751,7 +751,8 @@ struct CV_EXPORTS_W_SIMPLE QRCodeDetectorParameters {
 class CV_EXPORTS_W QRCodeDetector
 {
 public:
-    CV_WRAP QRCodeDetector(const QRCodeDetectorParameters& detectorParameters = QRCodeDetectorParameters());
+    CV_WRAP QRCodeDetector();
+    CV_WRAP QRCodeDetector(const QRCodeDetectorParameters& detectorParameters);
     ~QRCodeDetector();
 
     CV_WRAP QRCodeDetectorParameters& getDetectorParameters();
