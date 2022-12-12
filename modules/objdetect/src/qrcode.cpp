@@ -959,7 +959,6 @@ public:
     ~Impl() {}
 
     double epsX, epsY;
-    vector<Point2f> qrCorners;
     vector<vector<Point2f>> alignmentMarkers;
     bool useAlignmentMarkers = true;
 };
@@ -2798,10 +2797,6 @@ std::string QRCodeDetector::decode(InputArray in, InputArray points,
         qrdec.getStraightBarcode().convertTo(straight_qrcode, CV_8UC1);
     }
     if (ok && !decoded_info.empty()) {
-        p->qrCorners.resize(4ull);
-        for (size_t i = 0ull; i < 4ull; i++) {
-            p->qrCorners[i] = src_points[i];
-        }
         p->alignmentMarkers.push_back(qrdec.alignment_coords);
     }
     return ok ? decoded_info : std::string();
@@ -2857,8 +2852,6 @@ std::string QRCodeDetector::detectAndDecode(InputArray in,
     }
     updatePointsResult(points_, points);
     std::string decoded_info = decode(inarr, points, straight_qrcode);
-    if (!decoded_info.empty() && p->useAlignmentMarkers)
-        updatePointsResult(points_, p->qrCorners);
     return decoded_info;
 }
 
@@ -3868,16 +3861,14 @@ public:
                 }
                 qrdec[i].init(inarr2, src_points[i]);
                 ok = qrdec[i].straightDecodingProcess();
-                for (size_t j = 0ull; j < 4ull; j++) {
-                    src_points[i][j] = qrdec[i].getOriginalPoints()[j]*coeff_expansion;
-                }
-                for (size_t j = 0ull; j < qrdec[i].alignment_coords.size(); j++) {
-                    qrdec[i].alignment_coords[j] *= coeff_expansion;
-                }
                 if (ok)
                 {
                     decoded_info[i] = qrdec[i].getDecodeInformation();
                     straight_barcode[i] = qrdec[i].getStraightBarcode();
+                    for (size_t j = 0ull; j < 4ull; j++)
+                        src_points[i][j] = qrdec[i].getOriginalPoints()[j]*coeff_expansion;
+                    for (size_t j = 0ull; j < qrdec[i].alignment_coords.size(); j++)
+                        qrdec[i].alignment_coords[j] *= coeff_expansion;
                 }
             }
             if (decoded_info[i].empty())
@@ -3949,11 +3940,8 @@ bool QRCodeDetector::decodeMulti(
     {
        decoded_info.push_back(info[i]);
     }
-    p->qrCorners.resize(src_points.size()*4ull);
     p->alignmentMarkers.resize(src_points.size());
     for (size_t i = 0ull; i < src_points.size(); i++) {
-        for (size_t j = 0ull; j < 4ull; j++)
-            p->qrCorners[i*4ull+j] = src_points[i][j];
         p->alignmentMarkers[i] = qrdec[i].alignment_coords;
     }
     if (!decoded_info.empty())
@@ -3986,8 +3974,6 @@ bool QRCodeDetector::detectAndDecodeMulti(
     updatePointsResult(points_, points);
     decoded_info.clear();
     ok = decodeMulti(inarr, points, decoded_info, straight_qrcode);
-    if (ok && p->useAlignmentMarkers)
-        updatePointsResult(points_, p->qrCorners);
     return ok;
 }
 
