@@ -743,20 +743,11 @@ public:
 
 };
 
-struct CV_EXPORTS_W_SIMPLE QRCodeDetectorParameters {
-    QRCodeDetectorParameters();
-    CV_PROP_RW bool useAlignmentMarkers; // use markers to improve the position of the corners of the QR code
-};
-
 class CV_EXPORTS_W QRCodeDetector
 {
 public:
     CV_WRAP QRCodeDetector();
-    CV_WRAP QRCodeDetector(const QRCodeDetectorParameters& detectorParameters);
     ~QRCodeDetector();
-
-    CV_WRAP QRCodeDetectorParameters& getDetectorParameters();
-    const QRCodeDetectorParameters& getDetectorParameters() const;
 
     /** @brief sets the epsilon used during the horizontal scan of QR code stop marker detection.
      @param epsX Epsilon neighborhood, which allows you to determine the horizontal pattern
@@ -768,6 +759,12 @@ public:
      of the scheme 1:1:3:1:1 according to QR code standard.
      */
     CV_WRAP void setEpsY(double epsY);
+
+    /** @brief use markers to improve the position of the corners of the QR code
+     *
+     * alignmentMarkers using by default
+     */
+    CV_WRAP void setUseAlignmentMarkers(bool useAlignmentMarkers);
 
     /** @brief Detects QR code in image and returns the quadrangle containing the code.
      @param img grayscale or color (BGR) image containing (or not) QR code.

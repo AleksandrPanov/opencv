@@ -951,9 +951,6 @@ vector<Point2f> QRDetect::getQuadrilateral(vector<Point2f> angle_list)
     return result_angle_list;
 }
 
-QRCodeDetectorParameters::QRCodeDetectorParameters() {
-    useAlignmentMarkers = true;
-}
 
 struct QRCodeDetector::Impl
 {
@@ -964,24 +961,12 @@ public:
     double epsX, epsY;
     vector<Point2f> qrCorners;
     vector<vector<Point2f>> alignmentMarkers;
-    QRCodeDetectorParameters detectorParameters;
+    bool useAlignmentMarkers = true;
 };
 
 QRCodeDetector::QRCodeDetector() : p(new Impl) {}
 
-QRCodeDetector::QRCodeDetector(const QRCodeDetectorParameters& _detectorParameters) : p(new Impl) {
-    p->detectorParameters = _detectorParameters;
-}
-
 QRCodeDetector::~QRCodeDetector() {}
-
-QRCodeDetectorParameters& QRCodeDetector::getDetectorParameters() {
-    return p->detectorParameters;
-}
-
-const QRCodeDetectorParameters& QRCodeDetector::getDetectorParameters() const {
-    return p->detectorParameters;
-}
 
 void QRCodeDetector::setEpsX(double epsX) { p->epsX = epsX; }
 void QRCodeDetector::setEpsY(double epsY) { p->epsY = epsY; }
@@ -1004,8 +989,7 @@ bool QRCodeDetector::detect(InputArray in, OutputArray points) const
 class QRDecode
 {
 public:
-    QRDecode(QRCodeDetectorParameters& detectorParameters);
-
+    QRDecode(bool useAlignmentMarkers);
     void init(const Mat &src, const vector<Point2f> &points);
     Mat getIntermediateBarcode() { return intermediate; }
     Mat getStraightBarcode() { return straight; }
@@ -1015,7 +999,7 @@ public:
     bool curvedDecodingProcess();
     vector<Point2f> alignment_coords;
     vector<Point2f> getOriginalPoints() {return original_points;}
-    QRCodeDetectorParameters& detectorParameters;
+    bool useAlignmentMarkers;
 protected:
     double getNumModules();
     Mat getHomography() {
@@ -1109,7 +1093,6 @@ float static getMinSideLen(const vector<Point2f> &points) {
     return static_cast<float>(res);
 }
 
-QRDecode::QRDecode(QRCodeDetectorParameters& _detectorParameters): detectorParameters(_detectorParameters) {}
 
 void QRDecode::init(const Mat &src, const vector<Point2f> &points)
 {
@@ -2762,7 +2745,7 @@ bool QRDecode::straightDecodingProcess()
 #ifdef HAVE_QUIRC
     if (!updatePerspective(getHomography()))  { return false; }
     if (!versionDefinition())  { return false; }
-    if (detectorParameters.useAlignmentMarkers)
+    if (useAlignmentMarkers)
         detectAlignment();
     if (!samplingForVersion()) { return false; }
     if (!decodingProcess())    { return false; }
@@ -2787,6 +2770,8 @@ bool QRDecode::curvedDecodingProcess()
 #endif
 }
 
+QRDecode::QRDecode(bool _useAlignmentMarkers): useAlignmentMarkers(_useAlignmentMarkers) {}
+
 std::string QRCodeDetector::decode(InputArray in, InputArray points,
                                    OutputArray straight_qrcode)
 {
@@ -2799,7 +2784,7 @@ std::string QRCodeDetector::decode(InputArray in, InputArray points,
     CV_Assert(src_points.size() == 4);
     CV_CheckGT(contourArea(src_points), 0.0, "Invalid QR code source points");
 
-    QRDecode qrdec(p->detectorParameters);
+    QRDecode qrdec(p->useAlignmentMarkers);
     qrdec.init(inarr, src_points);
     bool ok = qrdec.straightDecodingProcess();
 
@@ -2834,7 +2819,7 @@ cv::String QRCodeDetector::decodeCurved(InputArray in, InputArray points,
     CV_Assert(src_points.size() == 4);
     CV_CheckGT(contourArea(src_points), 0.0, "Invalid QR code source points");
 
-    QRDecode qrdec(p->detectorParameters);
+    QRDecode qrdec(p->useAlignmentMarkers);
     qrdec.init(inarr, src_points);
     bool ok = qrdec.curvedDecodingProcess();
 
@@ -2872,7 +2857,7 @@ std::string QRCodeDetector::detectAndDecode(InputArray in,
     }
     updatePointsResult(points_, points);
     std::string decoded_info = decode(inarr, points, straight_qrcode);
-    if (!decoded_info.empty() && p->detectorParameters.useAlignmentMarkers)
+    if (!decoded_info.empty() && p->useAlignmentMarkers)
         updatePointsResult(points_, p->qrCorners);
     return decoded_info;
 }
@@ -3933,7 +3918,7 @@ bool QRCodeDetector::decodeMulti(
         }
     }
     CV_Assert(src_points.size() > 0);
-    vector<QRDecode> qrdec(src_points.size(), p->detectorParameters);
+    vector<QRDecode> qrdec(src_points.size(), p->useAlignmentMarkers);
     vector<Mat> straight_barcode(src_points.size());
     vector<std::string> info(src_points.size());
     ParallelDecodeProcess parallelDecodeProcess(inarr, qrdec, info, straight_barcode, src_points);
@@ -4001,9 +3986,13 @@ bool QRCodeDetector::detectAndDecodeMulti(
     updatePointsResult(points_, points);
     decoded_info.clear();
     ok = decodeMulti(inarr, points, decoded_info, straight_qrcode);
-    if (ok && p->detectorParameters.useAlignmentMarkers)
+    if (ok && p->useAlignmentMarkers)
         updatePointsResult(points_, p->qrCorners);
     return ok;
+}
+
+void QRCodeDetector::setUseAlignmentMarkers(bool useAlignmentMarkers) {
+    p->useAlignmentMarkers = useAlignmentMarkers;
 }
 
 
