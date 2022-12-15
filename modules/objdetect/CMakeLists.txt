@@ -3,6 +3,7 @@ ocv_define_module(objdetect
     opencv_core
     opencv_imgproc
     opencv_calib3d
+    opencv_aruco
     OPTIONAL
         opencv_dnn
     WRAP

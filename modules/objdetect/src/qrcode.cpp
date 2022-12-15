@@ -19,6 +19,8 @@
 #include <queue>
 #include <limits>
 #include <map>
+#include <opencv2/aruco_detector.hpp>
+
 
 namespace cv
 {
@@ -3645,12 +3647,53 @@ bool QRDetectMulti::localization()
 {
     CV_TRACE_FUNCTION();
     vector<Point2f> tmp_localization_points;
-    int num_points = findNumberLocalizationPoints(tmp_localization_points);
+    ///*
+    static uint8_t b[] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+    Mat bits(5, 5, CV_8UC1, b);
+    //std::cout << bits << std::endl;
+    Mat bytes = aruco::Dictionary::getByteListFromBits(bits);
+    auto dictionary = makePtr<aruco::Dictionary>(aruco::Dictionary(bytes, 5, 4));
+    aruco::ArucoDetector arucoDetector(dictionary);
+    std::vector<std::vector<cv::Point2f> > markers;
+    std::vector<int> ids;
+    arucoDetector.detectMarkers(barcode, markers, ids);
+    for (const auto& marker : markers) {
+        Point2f tmp;
+        for (const auto& corner: marker)
+            tmp += corner;
+        tmp_localization_points.push_back(coeff_expansion*tmp/4.f);
+    }
+    /*{
+        const double min_side = std::min(bin_barcode_fullsize.size().width, bin_barcode_fullsize.size().height);
+        bin_barcode_temp = bin_barcode.clone();
+        if (min_side > 512) {
+            purpose = SHRINKING;
+            coeff_expansion = min_side / 512.0;
+        } else if (min_side < 512) {
+            purpose = ZOOMING;
+            coeff_expansion = 512 / min_side;
+        } else {
+            bin_barcode = bin_barcode_fullsize;
+            bin_barcode_temp = bin_barcode.clone();
+            coeff_expansion = 1.;
+            purpose = UNCHANGED;
+        }
+    }*/
+    int num_points = tmp_localization_points.size();
+    bin_barcode = bin_barcode_fullsize;
+    bin_barcode_temp = bin_barcode.clone();
+    coeff_expansion = 1.;
+    purpose = UNCHANGED;
+    //*/
+    //int num_points = findNumberLocalizationPoints(tmp_localization_points);
+    //std::cout << tmp_localization_points << std::endl << std::endl;
     if (num_points < 3)
         return false;
     int num_qrcodes = divUp(num_points, 3);
     vector<vector<Point2f> > true_points_group;
     findQRCodeContours(tmp_localization_points, true_points_group, num_qrcodes);
+    //for (auto& t: true_points_group)
+    //    std::cout << t << std::endl << std::endl;
     for (int q = 0; q < num_qrcodes; q++)
     {
        vector<vector<Point2f> > loc;
