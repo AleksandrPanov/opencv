@@ -835,6 +835,8 @@ public:
     CV_WRAP
     bool detectMulti(InputArray img, OutputArray points) const;
 
+    CV_WRAP bool detectMultiAruco(InputArray img, OutputArray points) const;
+
     /** @brief Decodes QR codes in image once it's found by the detect() method.
      @param img grayscale or color (BGR) image containing QR codes.
      @param decoded_info UTF8-encoded output vector of string or empty vector of string if the codes cannot be decoded.

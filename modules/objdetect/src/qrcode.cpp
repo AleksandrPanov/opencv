@@ -3837,6 +3837,45 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     return true;
 }
 
+double analyzeFinderPattern(Point2f p1, Point2f p2, Point2f perpDirection, const Mat& im) {
+    // perpDirection has inward direction in finder pattern
+    const double dist = norm(p1-p2);
+    const Point2f halfModuleX = 0.5f*(p2-p1)/7.f;
+    const Point2f halfModuleY = 0.5f*perpDirection/7.f;
+    Point2f checkDirectionStart(p1 + halfModuleX - halfModuleY);
+    Point2f checkDirectionEnd(checkDirectionStart + 7.f*halfModuleX - 7.f*halfModuleY);
+    LineIterator lineIterator(checkDirectionStart, checkDirectionEnd);
+    return 1.;
+}
+
+bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
+{
+    Mat inarr;
+    if (!checkQRInputImage(in, inarr))
+    {
+        points.release();
+        return false;
+    }
+
+    QRDetectMulti qrdet;
+    //qrdet.init(inarr, p->epsX, p->epsY);
+
+    using namespace aruco;
+    Mat bits = Mat::ones(Size(5, 5), CV_8UC1);
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            bits.at<uint8_t>(i+1, j+1) = 0;
+    Mat byteList = Dictionary::getByteListFromBits(bits);
+    Dictionary dictionary = Dictionary(byteList, 5, 4);
+    ArucoDetector arucoDetector(dictionary);
+
+    vector<vector<Point2f> > corners;
+    vector<vector<Point2f> > rejectedCorners;
+    vector<int> ids;
+    arucoDetector.detectMarkers(inarr, corners, ids, rejectedCorners);
+    return true;
+}
+
 class ParallelDecodeProcess : public ParallelLoopBody
 {
 public:
