@@ -781,6 +781,21 @@ TEST(Objdetect_QRCode_decodeMulti, decode_9_qrcodes_version7)
     }
 }
 
+
+TEST(Objdetect_QRCode_detectMulti, test_aruco)
+{
+    const std::string name_current_image = "version_5_top.jpg";
+    const std::string root = "qrcode//";
+
+    std::string image_path = findDataFile(root + name_current_image);
+    Mat src = imread(image_path);
+    QRCodeDetector qrcode;
+    std::vector<Point> corners;
+    
+    vector<Point2f> res;
+    qrcode.detectMultiAruco(src, res);
+}
+
 #endif // UPDATE_QRCODE_TEST_DATA
 
 }} // namespace
