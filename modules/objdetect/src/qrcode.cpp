@@ -3839,6 +3839,14 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     return true;
 }
 
+struct FinderPatternInfo {
+    float moduleSize = 0.f;
+    pair<int, int> timingIds[4];
+    pair<float, float> timingScores[4];
+    int bestId = -1;
+    float angle = 0.f;
+};
+
 double analyzeFinderPattern(Point2f p1, Point2f p2, Point2f perpDirection, Mat& img) {
     // perpDirection has inward direction in finder pattern
     //const double dist = norm(p1-p2);
@@ -3863,12 +3871,12 @@ double analyzeFinderPattern(Point2f p1, Point2f p2, Point2f perpDirection, Mat& 
                 colorCounter++;
             }
         }
-        /*if (vec.size() >= 7ull) {
+        if (vec.size() >= 7ull) {
             for (int i = 0; i < vec.size(); i++)
                 circle(img, vec[i], 5, Scalar(127, 127, 127), FILLED, LINE_8);
             circle(img, checkDirectionStart, 5, Scalar(127, 127, 127), FILLED, LINE_8);
             circle(img, checkDirectionEnd, 5, Scalar(127, 127, 127), FILLED, LINE_8);
-        }*/
+        }
         return colorCounter;
     }
     return 0.;
@@ -3923,8 +3931,9 @@ bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
             }
             std::cout << std::endl;
         }
-        //imshow("binImage", binImage);
-        //waitKey(0);
+        imshow("binImage", binImage);
+        waitKey(0);
+        imwrite("binImage.png", binImage);
     }
     return true;
 }
