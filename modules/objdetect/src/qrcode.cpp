@@ -3863,10 +3863,12 @@ double analyzeFinderPattern(Point2f p1, Point2f p2, Point2f perpDirection, Mat& 
                 colorCounter++;
             }
         }
-        for (int i = 0; i < vec.size(); i++)
-            circle(img, vec[i], 5, Scalar(127, 127, 127), FILLED, LINE_8);
-        circle(img, checkDirectionStart, 5, Scalar(127, 127, 127), FILLED, LINE_8);
-        circle(img, checkDirectionEnd, 5, Scalar(127, 127, 127), FILLED, LINE_8);
+        /*if (vec.size() >= 7ull) {
+            for (int i = 0; i < vec.size(); i++)
+                circle(img, vec[i], 5, Scalar(127, 127, 127), FILLED, LINE_8);
+            circle(img, checkDirectionStart, 5, Scalar(127, 127, 127), FILLED, LINE_8);
+            circle(img, checkDirectionEnd, 5, Scalar(127, 127, 127), FILLED, LINE_8);
+        }*/
         return colorCounter;
     }
     return 0.;
@@ -3909,13 +3911,20 @@ bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
                 double res1 =
                 analyzeFinderPattern(corners[i][corner_id % 4], corners[i][(corner_id + 1) % 4],
                                      corners[i][(4 + corner_id - 1) % 4] - corners[i][corner_id % 4], binImage);
-                circle(binImage, corners[i][corner_id % 4], 5, Scalar(50), FILLED, LINE_8);
-                std::cout << res1 << std::endl;
+                //circle(binImage, corners[i][corner_id % 4], 5, Scalar(50), FILLED, LINE_8);
+                //std::cout << res1 << std::endl;
+                if (res1 >= 7.0) {
+                    double res2 =
+                    analyzeFinderPattern(corners[i][corner_id % 4], corners[i][(4 + corner_id - 1) % 4],
+                                         corners[i][(corner_id + 1) % 4] - corners[i][corner_id % 4], binImage);
+                    if (res2 >= 7.0)
+                        std::cout << "answer: " << res1 << " " << res2 << std::endl;
+                }
             }
             std::cout << std::endl;
         }
-        imshow("binImage", binImage);
-        waitKey(0);
+        //imshow("binImage", binImage);
+        //waitKey(0);
     }
     return true;
 }
