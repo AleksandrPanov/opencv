@@ -3840,11 +3840,51 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
 }
 
 struct FinderPatternInfo {
+    Point2f points[4];
     float moduleSize = 0.f;
     pair<int, int> timingIds[4];
     pair<float, float> timingScores[4];
+    pair<Point, Point> timingEnd[4];
     int bestId = -1;
     float angle = 0.f;
+
+    float analyzeFinderPatternSide(int curPointId, bool clockwise, Mat& img) {
+        // perpDirection has inward direction in finder pattern
+        Point2f p1 = points[curPointId];
+        Point2f p2;// = points[nextPointId];
+        Point2f perpDirection;
+        const float localModuleSize = sqrt(normL2Sqr<float>(p1-p2)) / 7.f;
+        const Point2f halfModuleX = 0.5f*(p2-p1)/7.f;
+        const Point2f halfModuleY = 0.5f*perpDirection/7.f;
+        Point2f checkDirectionStart(p1 + halfModuleX - halfModuleY);
+        Point2f checkDirectionEnd(checkDirectionStart - 2.f*7.f*halfModuleY);
+        Rect imageRect(Point(), img.size());
+        if (imageRect.contains(Point(cvRound(checkDirectionEnd.x), cvRound(checkDirectionEnd.y)))) {
+            LineIterator lineIterator(checkDirectionStart, checkDirectionEnd);
+            uint8_t prevValue = img.at<uint8_t>(lineIterator.pos());
+
+            vector<Point> vec = {lineIterator.pos()};
+
+            lineIterator++;
+            int colorCounter = 1;
+
+            for(int j = 1; j < lineIterator.count; j++, ++lineIterator) {
+                const uint8_t value = img.at<uint8_t>(lineIterator.pos());
+                if (prevValue != value) {
+                    vec.push_back(lineIterator.pos());
+                    prevValue = value;
+                    colorCounter++;
+                }
+            }
+            //if (vec.size() >= 7ull) {
+            //    for (int i = 0; i < vec.size(); i++)
+            //        circle(img, vec[i], 5, Scalar(127, 127, 127), FILLED, LINE_8);
+            //    circle(img, checkDirectionStart, 5, Scalar(127, 127, 127), FILLED, LINE_8);
+            //    circle(img, checkDirectionEnd, 5, Scalar(127, 127, 127), FILLED, LINE_8);
+            //}
+        }
+        return localModuleSize;
+    }
 };
 
 double analyzeFinderPattern(Point2f p1, Point2f p2, Point2f perpDirection, Mat& img) {
