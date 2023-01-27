@@ -3840,27 +3840,32 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
 }
 
 struct FinderPatternInfo {
-    Point2f points[4];
+    vector<Point2f> &points = _points;
     float moduleSize = 0.f;
-    pair<int, int> timingIds[4];
-    pair<int, int> timingScores[4];
-    pair<Point, Point> timingEnd[4];
-    int bestId = -1;
-    float angle = 0.f;
+    //pair<int, int> timingIds[4];
+    int timingScores[2][4];
+    Point timingEnd[2][4];
+    int bestTotalId = 0;
+    int bestTotalScore = 0;
+    int bestId = 0;
+    int bestScore = 0;
+    float qrAngle = 0.f;
 
     float analyzeFinderPatternSide(int curPointId, bool clockwise, Mat& img) {
         // perpDirection has inward direction in finder pattern
         const Point2f p1 = points[curPointId];
-        const Point2f p2 = points[(curPointId + (clockwise ? 1 : 4-1)) % 4];
-        Point2f perpDirection = points[curPointId] - points[(curPointId + (clockwise ? 4-1 : 1)) % 4];
+        const int offset = clockwise ? 1 : 4-1;
+        const Point2f p2 = points[(curPointId + offset) % 4];
+        Point2f perpDirection = points[curPointId] - points[(4 + curPointId - offset) % 4];
         const float localModuleSize = sqrt(normL2Sqr<float>(p1-p2)) / 7.f;
         const Point2f halfModuleX = 0.5f*(p2-p1)/7.f;
         const Point2f halfModuleY = 0.5f*perpDirection/7.f;
-        const Point2f checkDirectionStart(p1 + halfModuleX - halfModuleY);
-        const Point2f checkDirectionEnd(checkDirectionStart - 2.f*7.f*halfModuleY);
+        const Point2f checkDirectionStart(p1 + halfModuleX + halfModuleY);
+        const Point2f maxEnd(checkDirectionStart + 2.f*(7.f+6.f)*halfModuleY);
+        const Point2f checkDirectionEnd(checkDirectionStart + 2.f*7.f*halfModuleY);
 
         Rect imageRect(Point(), img.size());
-        if (imageRect.contains(Point(cvRound(checkDirectionEnd.x), cvRound(checkDirectionEnd.y)))) {
+        if (imageRect.contains(Point(cvRound(maxEnd.x), cvRound(maxEnd.y)))) {
             LineIterator lineIterator(checkDirectionStart, checkDirectionEnd);
             uint8_t prevValue = img.at<uint8_t>(lineIterator.pos());
 
@@ -3869,34 +3874,65 @@ struct FinderPatternInfo {
             lineIterator++;
             int colorCounter = 1;
 
-            for(int j = 1; j < lineIterator.count; j++, ++lineIterator) {
+            for(int i = 1; i < lineIterator.count; i++, ++lineIterator) {
                 const uint8_t value = img.at<uint8_t>(lineIterator.pos());
                 if (prevValue != value) {
+                    const float dist = sqrt(normL2Sqr<float>((Point2f)(vec.back()-lineIterator.pos())));
+                    // check long and short lines
+                    if (max(localModuleSize, dist)/min(localModuleSize, dist) > 2.85f)
+                        break;
                     vec.push_back(lineIterator.pos());
                     prevValue = value;
                     colorCounter++;
                 }
             }
-            int curScore = clockwise ? timingScores[curPointId].first : timingScores[curPointId].second;
-            if (colorCounter > curScore && colorCounter <= 8) { // max value of colorCounter is 8
-                Point& curPoint = clockwise ? timingEnd[curPointId].first : timingEnd[curPointId].second;
-                curPoint = checkDirectionEnd;
+            std::cout << "colorCounter " << colorCounter << std::endl;
 
+            if (colorCounter >= 6 && colorCounter <= 8) { // max value of colorCounter is 8
+                timingScores[clockwise][curPointId] = colorCounter;
+                timingEnd[clockwise][curPointId] = checkDirectionEnd;
+                if (bestTotalScore < timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId]) {
+                    bestTotalId = curPointId;
+                    bestTotalScore = timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId];
+                }
+                if (bestScore < timingScores[clockwise][curPointId] || bestScore < timingScores[!clockwise][curPointId]) {
+                    bestId = curPointId;
+                    bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
+                }
             }
             else if (colorCounter > 8) {
-                CV_LOG_WARNING(NULL, "analyzeFinderPatternSide found too many modules, need change parameters in"
+                colorCounter = 0;
+                CV_LOG_WARNING(NULL, "analyzeFinderPatternSide found too many modules, try to change parameters in"
                                      "adaptiveThreshold" << colorCounter);
             }
-            //if (vec.size() >= 7ull) {
+            circle(img, checkDirectionStart, 3, Scalar(127, 127, 127), FILLED, LINE_8);
+            circle(img, checkDirectionEnd, 3, Scalar(127, 127, 127), FILLED, LINE_8);
+            //if (vec.size() >= 9ull) {
             //    for (int i = 0; i < vec.size(); i++)
-            //        circle(img, vec[i], 5, Scalar(127, 127, 127), FILLED, LINE_8);
-            //    circle(img, checkDirectionStart, 5, Scalar(127, 127, 127), FILLED, LINE_8);
-            //    circle(img, checkDirectionEnd, 5, Scalar(127, 127, 127), FILLED, LINE_8);
+            //        circle(img, vec[i], 2, Scalar(127, 127, 127), FILLED, LINE_8);
             //}
         }
         return localModuleSize;
     }
+private:
+    vector<Point2f> _points;
 };
+
+void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
+    vector<FinderPatternInfo> patterns(corners.size());
+    for (size_t i = 0ull; i < corners.size(); i++) {
+        patterns[i].points = corners[i];
+        float moduleSize = 0.f;
+        for (size_t j = 0ull; j < (int)corners[i].size(); j++) { // process 4 sides
+            moduleSize += patterns[i].analyzeFinderPatternSide((int)j, true, img);
+            patterns[i].analyzeFinderPatternSide((int)j, false, img);
+        }
+        patterns[i].moduleSize = moduleSize / corners[i].size();
+        std::cout << "patterns[i].moduleSize " << patterns[i].moduleSize << std::endl;
+        std::cout << "patterns[i].bestTotalScore " << patterns[i].bestTotalScore << std::endl;
+        //analyzeFinderPattern()
+    }
+}
 
 double analyzeFinderPattern(Point2f p1, Point2f p2, Point2f perpDirection, Mat& img) {
     // perpDirection has inward direction in finder pattern
@@ -3964,24 +4000,25 @@ bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
         adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
         //imshow("binImage", binImage);
         //waitKey(0);
-        vector<double> res(corners.size());
-        for (size_t i = 0ull; i < corners.size(); i++) {
-            for (int corner_id = 0; corner_id < 5; corner_id++) {
-                double res1 =
-                analyzeFinderPattern(corners[i][corner_id % 4], corners[i][(corner_id + 1) % 4],
-                                     corners[i][(4 + corner_id - 1) % 4] - corners[i][corner_id % 4], binImage);
-                //circle(binImage, corners[i][corner_id % 4], 5, Scalar(50), FILLED, LINE_8);
-                //std::cout << res1 << std::endl;
-                if (res1 >= 7.0) {
-                    double res2 =
-                    analyzeFinderPattern(corners[i][corner_id % 4], corners[i][(4 + corner_id - 1) % 4],
-                                         corners[i][(corner_id + 1) % 4] - corners[i][corner_id % 4], binImage);
-                    if (res2 >= 7.0)
-                        std::cout << "answer: " << res1 << " " << res2 << std::endl;
-                }
-            }
-            std::cout << std::endl;
-        }
+        analyzeFinderPatterns(corners, binImage);
+        //vector<double> res(corners.size());
+        //for (size_t i = 0ull; i < corners.size(); i++) {
+        //    for (int corner_id = 0; corner_id < 4; corner_id++) {
+        //        double res1 =
+        //        analyzeFinderPattern(corners[i][corner_id % 4], corners[i][(corner_id + 1) % 4],
+        //                             corners[i][(4 + corner_id - 1) % 4] - corners[i][corner_id % 4], binImage);
+        //        //circle(binImage, corners[i][corner_id % 4], 5, Scalar(50), FILLED, LINE_8);
+        //        //std::cout << res1 << std::endl;
+        //        if (res1 >= 7.0) {
+        //            double res2 =
+        //            analyzeFinderPattern(corners[i][corner_id % 4], corners[i][(4 + corner_id - 1) % 4],
+        //                                 corners[i][(corner_id + 1) % 4] - corners[i][corner_id % 4], binImage);
+        //            if (res2 >= 7.0)
+        //                std::cout << "answer: " << res1 << " " << res2 << std::endl;
+        //        }
+        //    }
+        //    std::cout << std::endl;
+        //}
         imshow("binImage", binImage);
         waitKey(0);
         imwrite("binImage.png", binImage);
