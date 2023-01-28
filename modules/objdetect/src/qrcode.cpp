@@ -3853,7 +3853,7 @@ struct FinderPatternInfo {
         moduleSize /= (4.f * 7.f); // 4 sides, 7 modules in one side
         center /= 4.f;
         minQrAngle = asin(minSin);
-        //std::cout << "minQrAngle " << minQrAngle << std::endl;
+        std::cout << "minQrAngle " << minQrAngle << std::endl;
         //std::cout << "minSin " << minSin << std::endl;
     }
 
@@ -3863,6 +3863,7 @@ struct FinderPatternInfo {
         const int offset = clockwise ? 1 : 4-1;
         const Point2f p2 = points[(curPointId + offset) % 4];
         Point2f perpDirection = points[curPointId] - points[(4 + curPointId - offset) % 4];
+        perpendiculars[clockwise][curPointId] = perpDirection;
         const Point2f halfModuleX = 0.5f*(p2-p1)/7.f;
         const Point2f halfModuleY = 0.5f*perpDirection/7.f;
         const Point2f checkDirectionStart(p1 + halfModuleX + halfModuleY);
@@ -3897,10 +3898,11 @@ struct FinderPatternInfo {
             const int minNumModules = 6; // set 6 out of 8 modules as valid result
             if (colorCounter > minNumModules && maxNumModules <= maxNumModules) { 
                 timingScores[clockwise][curPointId] = colorCounter;
-                timingEnd[clockwise][curPointId] = checkDirectionEnd;
+                // timingEnd[clockwise][curPointId] = checkDirectionEnd;
                 if (bestTotalScore < timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId]) {
                     bestTotalId = curPointId;
                     bestTotalScore = timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId];
+                    //bestTotalTimingEnd[]
                 }
                 if (bestScore < timingScores[clockwise][curPointId] || bestScore < timingScores[!clockwise][curPointId]) {
                     bestId[0] = clockwise;
@@ -3922,6 +3924,22 @@ struct FinderPatternInfo {
         }
     }
 
+    bool compatibilityPattern(const FinderPatternInfo& otherPattern) {
+        if (typePattern == TypePattern::CENTER &&
+            (otherPattern.typePattern == TypePattern::BOTTOM || otherPattern.typePattern == TypePattern::RIGHT)) {
+            const float maxRotateDiff = (float)CV_PI/12.f; // 15 degrees
+            if (abs(minQrAngle - otherPattern.minQrAngle) < maxRotateDiff) { // check 15 degrees
+                const float maxRelativeModuleDiff = 1.75f;
+                if (max(moduleSize, otherPattern.moduleSize) / min(moduleSize, otherPattern.moduleSize) < maxRelativeModuleDiff) {
+                    // need to use perpendiculars
+                    //if 
+                }
+            }
+        }
+        
+        return false;
+    }
+
     pair<bool, Point2f> getQRCorner() {
         if (typePattern == TypePattern::CENTER) {
             return std::make_pair(true, points[(bestTotalId + 2) % 4]);
@@ -3934,7 +3952,7 @@ struct FinderPatternInfo {
 
     float moduleSize = 0.f;
     int timingScores[2][4] = {0};
-    Point timingEnd[2][4] = {0};
+    Point perpendiculars[2][4];
 
     int bestTotalId = 0;
     int bestTotalScore = 0;
@@ -3994,7 +4012,14 @@ void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
         std::cout << "pattern.moduleSize " << pattern.moduleSize << std::endl;
         std::cout << "pattern.bestTotalScore " << pattern.bestTotalScore << std::endl;
     }
-    vector<FinderPatternInfo[3]> qrCodes;
+
+    vector<std::array<FinderPatternInfo, 3> > qrCodes;
+    for (const FinderPatternInfo& centerPattern : patterns[FinderPatternInfo::TypePattern::CENTER]) {
+        const FinderPatternInfo& rightPattern = patterns[FinderPatternInfo::TypePattern::RIGHT].back();
+        const FinderPatternInfo& bottomPattern = patterns[FinderPatternInfo::TypePattern::BOTTOM].back();
+        std::array<FinderPatternInfo, 3> qr = {centerPattern, rightPattern, bottomPattern};
+        qrCodes.push_back(qr);
+    }
 }
 
 bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
