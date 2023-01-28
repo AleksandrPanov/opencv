@@ -3840,18 +3840,25 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
 }
 
 struct FinderPatternInfo {
-    vector<Point2f> &points = _points;
     float moduleSize = 0.f;
     //pair<int, int> timingIds[4];
-    int timingScores[2][4];
-    Point timingEnd[2][4];
+    int timingScores[2][4] = {0};
+    Point timingEnd[2][4] = {0};
     int bestTotalId = 0;
     int bestTotalScore = 0;
-    int bestId = 0;
+    int bestId[2] = {0};
     int bestScore = 0;
-    float qrAngle = 0.f;
+    float qrAngle = 0.f; 
+    enum TypePattern {
+        CENTRAL,
+        RIGHT,
+        BOTTOM,
+        NONE
+    };
+    Point2f center;
+    TypePattern typePattern = NONE;
 
-    float analyzeFinderPatternSide(int curPointId, bool clockwise, Mat& img) {
+    float analyzeFinderPatternSide(const vector<Point2f> &points, int curPointId, bool clockwise, Mat& img) {
         // perpDirection has inward direction in finder pattern
         const Point2f p1 = points[curPointId];
         const int offset = clockwise ? 1 : 4-1;
@@ -3896,7 +3903,8 @@ struct FinderPatternInfo {
                     bestTotalScore = timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId];
                 }
                 if (bestScore < timingScores[clockwise][curPointId] || bestScore < timingScores[!clockwise][curPointId]) {
-                    bestId = curPointId;
+                    bestId[0] = clockwise;
+                    bestId[1] = curPointId;
                     bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
                 }
             }
@@ -3921,13 +3929,32 @@ private:
 void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
     vector<FinderPatternInfo> patterns(corners.size());
     for (size_t i = 0ull; i < corners.size(); i++) {
-        patterns[i].points = corners[i];
+        Point2f center;
         float moduleSize = 0.f;
         for (size_t j = 0ull; j < (int)corners[i].size(); j++) { // process 4 sides
-            moduleSize += patterns[i].analyzeFinderPatternSide((int)j, true, img);
-            patterns[i].analyzeFinderPatternSide((int)j, false, img);
+            moduleSize += patterns[i].analyzeFinderPatternSide(corners[i], (int)j, true, img);
+            patterns[i].analyzeFinderPatternSide(corners[i], (int)j, false, img);
+            center += corners[i][j];
         }
+        center /= (float)corners[i].size();
+        patterns[i].center = center;
         patterns[i].moduleSize = moduleSize / corners[i].size();
+        if (patterns[i].bestTotalScore >= 14) {
+            patterns[i].typePattern = FinderPatternInfo::TypePattern::CENTRAL;
+            //circle(img, patterns[i].center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+        }
+        else if (patterns[i].bestScore >= 7) {
+            if (patterns[i].bestId[0] == 1) {
+                patterns[i].typePattern = FinderPatternInfo::TypePattern::RIGHT;
+                //circle(img, patterns[i].center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+            }
+            else { // patterns[i].bestId[0] == 0
+                patterns[i].typePattern = FinderPatternInfo::TypePattern::BOTTOM;
+                circle(img, patterns[i].center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+            }
+
+        }
+
         std::cout << "patterns[i].moduleSize " << patterns[i].moduleSize << std::endl;
         std::cout << "patterns[i].bestTotalScore " << patterns[i].bestTotalScore << std::endl;
         //analyzeFinderPattern()
