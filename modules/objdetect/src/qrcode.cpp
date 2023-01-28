@@ -3847,7 +3847,7 @@ struct FinderPatternInfo {
             center += points[i];
             const Point2f side = points[i]-points[(i+1) % 4];
             const float lenSide = sqrt(normL2Sqr<float>(side));
-            minSin = min(minSin, abs(side.y)f / lenSide);
+            minSin = min(minSin, abs(side.y) / lenSide);
             moduleSize += lenSide;
         }
         moduleSize /= (4.f * 7.f); // 4 sides, 7 modules in one side
@@ -3884,7 +3884,8 @@ struct FinderPatternInfo {
                 if (prevValue != value) {
                     const float dist = sqrt(normL2Sqr<float>((Point2f)(vec.back()-lineIterator.pos())));
                     // check long and short lines
-                    if (max(moduleSize, dist)/min(moduleSize, dist) > 2.85f)
+                    const float maxRelativeModuleDif = 2.85f;
+                    if (max(moduleSize, dist)/min(moduleSize, dist) > maxRelativeModuleDif)
                         break;
                     vec.push_back(lineIterator.pos());
                     prevValue = value;
@@ -3892,8 +3893,9 @@ struct FinderPatternInfo {
                 }
             }
             std::cout << "colorCounter " << colorCounter << std::endl;
-
-            if (colorCounter >= 6 && colorCounter <= 8) { // max value of colorCounter is 8
+            const int maxNumModules = 8; // the maximum number of modules is 8
+            const int minNumModules = 6; // set 6 out of 8 modules as valid result
+            if (colorCounter > minNumModules && maxNumModules <= maxNumModules) { 
                 timingScores[clockwise][curPointId] = colorCounter;
                 timingEnd[clockwise][curPointId] = checkDirectionEnd;
                 if (bestTotalScore < timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId]) {
