@@ -3913,8 +3913,8 @@ struct FinderPatternInfo {
                 CV_LOG_WARNING(NULL, "analyzeFinderPatternSide found too many modules, try to change parameters in"
                                      "adaptiveThreshold" << colorCounter);
             }
-            circle(img, checkDirectionStart, 3, Scalar(127, 127, 127), FILLED, LINE_8);
-            circle(img, checkDirectionEnd, 3, Scalar(127, 127, 127), FILLED, LINE_8);
+            //circle(img, checkDirectionStart, 3, Scalar(127, 127, 127), FILLED, LINE_8);
+            //circle(img, checkDirectionEnd, 3, Scalar(127, 127, 127), FILLED, LINE_8);
             //if (vec.size() >= 9ull) {
             //    for (int i = 0; i < vec.size(); i++)
             //        circle(img, vec[i], 2, Scalar(127, 127, 127), FILLED, LINE_8);
@@ -3958,8 +3958,7 @@ private:
 };
 
 void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
-    vector<FinderPatternInfo> patterns;
-    patterns.reserve(corners.size());
+    vector<FinderPatternInfo> patterns[4];
     for (size_t i = 0ull; i < corners.size(); i++) {
         FinderPatternInfo pattern(corners[i]);
         for (size_t j = 0ull; j < (int)corners[i].size(); j++) { // process 4 sides
@@ -3968,24 +3967,34 @@ void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
         }
         if (pattern.bestTotalScore >= 14) {
             pattern.typePattern = FinderPatternInfo::TypePattern::CENTER;
+            patterns[FinderPatternInfo::TypePattern::CENTER].push_back(pattern);
             //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
         }
         else if (pattern.bestScore >= 7) {
             if (pattern.bestId[0] == 1) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::RIGHT;
+                patterns[FinderPatternInfo::TypePattern::RIGHT].push_back(pattern);
                 //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
             }
-            else { // pattern.bestId[0] == 0
+            else if (pattern.bestId[0] == 0) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::BOTTOM;
-                circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+                patterns[FinderPatternInfo::TypePattern::BOTTOM].push_back(pattern);
+                //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+            }
+            else {
+                CV_Error(cv::Error::StsBadArg, "Invalid argument value, clockwise must be 0 or 1");
             }
 
         }
-        patterns.push_back(pattern);
+        else {
+            pattern.typePattern = FinderPatternInfo::TypePattern::NONE;
+            patterns[FinderPatternInfo::TypePattern::NONE].push_back(pattern);
+        }
 
         std::cout << "pattern.moduleSize " << pattern.moduleSize << std::endl;
         std::cout << "pattern.bestTotalScore " << pattern.bestTotalScore << std::endl;
     }
+    vector<FinderPatternInfo[3]> qrCodes;
 }
 
 bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
