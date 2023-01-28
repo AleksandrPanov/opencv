@@ -3842,12 +3842,19 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
 struct FinderPatternInfo {
 
     FinderPatternInfo(vector<Point2f> patternPoints): points(patternPoints) {
-        for (size_t i = 0ull; i < points.size(); i++) {
+        float minSin = 1.f;
+        for (int i = 0; i < 4; i++) {
             center += points[i];
-            moduleSize += sqrt(normL2Sqr<float>(points[i]-points[(i+1ull) % points.size()])) / 7.f;
+            const Point2f side = points[i]-points[(i+1) % 4];
+            const float lenSide = sqrt(normL2Sqr<float>(side));
+            minSin = min(minSin, abs(side.y)f / lenSide);
+            moduleSize += lenSide;
         }
-        moduleSize /= (float)points.size();
-        center /= (float)points.size();
+        moduleSize /= (4.f * 7.f); // 4 sides, 7 modules in one side
+        center /= 4.f;
+        minQrAngle = asin(minSin);
+        //std::cout << "minQrAngle " << minQrAngle << std::endl;
+        //std::cout << "minSin " << minSin << std::endl;
     }
 
     void analyzeFinderPatternSide(int curPointId, bool clockwise, Mat& img) {
@@ -3915,10 +3922,10 @@ struct FinderPatternInfo {
 
     pair<bool, Point2f> getQRCorner() {
         if (typePattern == TypePattern::CENTER) {
-            return std::make_pair(true, points[(bestTotalId + 2) % points.size()]);
+            return std::make_pair(true, points[(bestTotalId + 2) % 4]);
         }
         else if (typePattern != TypePattern::NONE) {
-            return std::make_pair(true, points[(bestId[1] + 2) % points.size()]);
+            return std::make_pair(true, points[(bestId[1] + 2) % 4]);
         }
         return std::make_pair(false, Point2f());
     }
@@ -3933,7 +3940,7 @@ struct FinderPatternInfo {
     int bestId[2] = {0}; // first value - clockwise 0 or 1, second value - best id
     int bestScore = 0;
 
-    float qrAngle = 0.f; 
+    float minQrAngle = 0.f; 
     enum TypePattern {
         CENTER,
         RIGHT,
