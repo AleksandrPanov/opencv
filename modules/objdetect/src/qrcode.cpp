@@ -3857,6 +3857,10 @@ struct FinderPatternInfo {
         //std::cout << "minSin " << minSin << std::endl;
     }
 
+    static FinderPatternInfo createEmpty() {
+        return FinderPatternInfo();
+    }
+
     enum TypePattern {
         CENTER,
         RIGHT,
@@ -3949,17 +3953,31 @@ struct FinderPatternInfo {
                 }
             }
         }     
-        return -1.f;
+        return std::numeric_limits<float>::max();
     }
 
-    pair<bool, Point2f> getQRCornerId() const {
+    pair<int, Point2f> getQRCorner() const {
         if (typePattern == TypePattern::CENTER) {
-            return std::make_pair(true, points[(bestTotalId + 2) % 4]);
+            int id = (bestTotalId + 2) % 4;
+            return std::make_pair(id, points[id]);
         }
         else if (typePattern != TypePattern::NONE) {
-            return std::make_pair(true, points[(bestId[1] + 2) % 4]);
+            int id = (bestId[1] + 2) % 4;
+            return std::make_pair(id, points[id]);
         }
-        return std::make_pair(false, Point2f());
+        return std::make_pair(-1, Point2f());
+    }
+
+    pair<int, Point2f> getCornerForIntersection() const {
+        if (typePattern == TypePattern::RIGHT) {
+            int id = (bestId[1] + 3) % 4;
+            return std::make_pair(id, points[id]);
+        }
+        else if (typePattern == TypePattern::BOTTOM) {
+            int id = (bestId[1] + 1) % 4;
+            return std::make_pair(id, points[id]);
+        }
+        return std::make_pair(-1, Point2f());
     }
 
     Point2f getPerpTo(TypePattern _typePattern) const {
@@ -4008,8 +4026,28 @@ private:
     FinderPatternInfo() {}
 };
 
-void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
+struct QRCode {
+    FinderPatternInfo centerPattern;
+    FinderPatternInfo rightPattern;
+    FinderPatternInfo bottomPattern;
+
+    vector<Point2f> getQRCorners() const {
+        Point2f a1 = rightPattern.getQRCorner().second;
+        Point2f a2 = rightPattern.getCornerForIntersection().second;
+
+        Point2f b1 = bottomPattern.getQRCorner().second;
+        Point2f b2 = bottomPattern.getCornerForIntersection().second;
+
+        Point2f rightBottom = intersectionLines(a1, a2, b1, b2);
+
+        return {centerPattern.getQRCorner().second, rightPattern.getQRCorner().second, rightBottom, bottomPattern.getQRCorner().second};
+    }
+};
+
+vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
+    vector<QRCode> qrCodes;
     vector<FinderPatternInfo> patterns[4];
+
     for (size_t i = 0ull; i < corners.size(); i++) {
         FinderPatternInfo pattern(corners[i]);
         for (size_t j = 0ull; j < (int)corners[i].size(); j++) { // process 4 sides
@@ -4050,15 +4088,53 @@ void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
         std::cout << "pattern.bestTotalScore " << pattern.bestTotalScore << std::endl;
     }
 
-    vector<std::array<FinderPatternInfo, 3> > qrCodes;
     for (const FinderPatternInfo& centerPattern : patterns[FinderPatternInfo::TypePattern::CENTER]) {
-        const FinderPatternInfo& rightPattern = patterns[FinderPatternInfo::TypePattern::RIGHT].back();
-        const FinderPatternInfo& bottomPattern = patterns[FinderPatternInfo::TypePattern::BOTTOM].back();
-        if (centerPattern.compatibilityPattern(rightPattern) > 0.f && centerPattern.compatibilityPattern(bottomPattern) > 0.f) {
-        std::array<FinderPatternInfo, 3> qr = {centerPattern, rightPattern, bottomPattern};
-        qrCodes.push_back(qr);
+        if (patterns[FinderPatternInfo::TypePattern::RIGHT].size() == 0ull ||
+            patterns[FinderPatternInfo::TypePattern::BOTTOM].size() == 0ull)
+            return qrCodes;
+
+        FinderPatternInfo rightPattern = FinderPatternInfo::createEmpty();
+        {   
+            int bestIdRight = -1;
+            float bestDistRight = std::numeric_limits<float>::max();
+            for (size_t i = 0ull; i < patterns[FinderPatternInfo::TypePattern::RIGHT].size(); i++) {
+                const float distRight = centerPattern.compatibilityPattern(patterns[FinderPatternInfo::TypePattern::RIGHT][i]);
+                if (distRight < bestDistRight) {
+                    bestIdRight = (int)i;
+                    bestDistRight = distRight;
+                }
+            }
+            if (bestIdRight != -1) {
+                rightPattern = patterns[FinderPatternInfo::TypePattern::RIGHT][bestIdRight];
+                swap(patterns[FinderPatternInfo::TypePattern::RIGHT][bestIdRight], patterns[FinderPatternInfo::TypePattern::RIGHT].back());
+                patterns[FinderPatternInfo::TypePattern::RIGHT].pop_back();
+            }
+            if (bestIdRight == -1)
+                continue;
         }
+
+
+        FinderPatternInfo bottomPattern = FinderPatternInfo::createEmpty();
+        {
+            int bestIdBottom = -1;
+            float bestDistBottom = std::numeric_limits<float>::max();
+            for (size_t i = 0ull; i < patterns[FinderPatternInfo::TypePattern::BOTTOM].size(); i++) {
+                    const float distBottom = centerPattern.compatibilityPattern(patterns[FinderPatternInfo::TypePattern::BOTTOM][i]);
+                    if (distBottom < bestDistBottom) {
+                        bestIdBottom = (int)i;
+                        bestDistBottom = distBottom;
+                    }
+            }
+            if (bestIdBottom != -1) {
+                bottomPattern = patterns[FinderPatternInfo::TypePattern::BOTTOM][bestIdBottom];
+                swap(patterns[FinderPatternInfo::TypePattern::BOTTOM][bestIdBottom], patterns[FinderPatternInfo::TypePattern::BOTTOM].back());
+                patterns[FinderPatternInfo::TypePattern::BOTTOM].pop_back();
+            }
+        }
+        qrCodes.push_back({centerPattern, rightPattern, bottomPattern});
     }
+
+    return qrCodes;
 }
 
 bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
@@ -4092,7 +4168,12 @@ bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
         adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
         //imshow("binImage", binImage);
         //waitKey(0);
-        analyzeFinderPatterns(corners, binImage);
+        vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
+        if (qrCodes.size() > 0ull) {
+            for (auto& qr : qrCodes) {
+                std::cout << qr.getQRCorners();
+            }
+        }
         imshow("binImage", binImage);
         waitKey(0);
         imwrite("binImage.png", binImage);
