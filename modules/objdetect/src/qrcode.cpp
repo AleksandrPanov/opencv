@@ -3857,6 +3857,13 @@ struct FinderPatternInfo {
         //std::cout << "minSin " << minSin << std::endl;
     }
 
+    enum TypePattern {
+        CENTER,
+        RIGHT,
+        BOTTOM,
+        NONE
+    };
+
     void analyzeFinderPatternSide(int curPointId, bool clockwise, Mat& img) {
         // perpDirection has inward direction in finder pattern
         const Point2f p1 = points[curPointId];
@@ -3924,23 +3931,44 @@ struct FinderPatternInfo {
         }
     }
 
-    bool compatibilityPattern(const FinderPatternInfo& otherPattern) {
+    bool compatibilityPattern(const FinderPatternInfo& otherPattern) const {
         if (typePattern == TypePattern::CENTER &&
             (otherPattern.typePattern == TypePattern::RIGHT || otherPattern.typePattern == TypePattern::BOTTOM)) {
             const float maxRotateDiff = (float)CV_PI/12.f; // 15 degrees
             if (abs(minQrAngle - otherPattern.minQrAngle) < maxRotateDiff) { // check 15 degrees
+                // TODO: move maxRelativeModuleDiff to parameters
                 const float maxRelativeModuleDiff = 1.75f;
                 if (max(moduleSize, otherPattern.moduleSize) / min(moduleSize, otherPattern.moduleSize) < maxRelativeModuleDiff) {
-                    Point2f qrDirect = center - otherPattern.center;
-                    // TODO: need add id to TypePattern method
-                    // perpendiculars[1] convert to -> perpendiculars[getIdByType()?]
+                    Point2f centerFindernPatternDirect = (Point2f)perpendiculars[getPerpId(otherPattern.typePattern)][bestTotalId];
+                    Point2f otherFinderPatternDirect = (Point2f)perpendiculars[otherPattern.getPerpId(TypePattern::CENTER)][bestTotalId];
                     if (otherPattern.typePattern == TypePattern::RIGHT) {
-                        Point finderPatternDirect = otherPattern.perpendiculars[1][otherPattern.bestId[1]];
+                        Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[1][otherPattern.bestId[1]];
+                        const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
+                                                                                                           sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
+                        if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
+                            return true;
+                        }
+                        // TODO: add to notepad and remove
+                        // Maybe used to find curve QR code ???
+                        //Point2f qrDirect = center - otherPattern.center;
+                        //const float cosAngle1 = qrDirect.dot(centerFindernPatternDirect) / (sqrt(normL2Sqr<float>(qrDirect)) *
+                        //                                                                    sqrt(normL2Sqr<float>((Point2f)centerFindernPatternDirect)));
+                        //if (acos(abs(cosAngle1)) < maxRotateDiff) { // check center pattern
+                        //    Point finderPatternDirect = otherPattern.perpendiculars[1][otherPattern.bestId[1]];
+                        //    const float cosAngle2 = qrDirect.dot(finderPatternDirect) / (sqrt(normL2Sqr<float>(qrDirect)) *
+                        //                                                                 sqrt(normL2Sqr<float>((Point2f)finderPatternDirect)));
+                        //    if (acos(cosAngle2) < maxRotateDiff) { // check other pattern
+                        //        return true;
+                        //    }
+                        //}
                     }
-                    // TODO: TODO: need add id to TypePattern method
-                    // perpendiculars[0] convert to -> perpendiculars[getIdByType()?]
                     else if (otherPattern.typePattern == TypePattern::BOTTOM) {
-                        Point finderPatternDirect = otherPattern.perpendiculars[0][otherPattern.bestId[1]];
+                        Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[0][otherPattern.bestId[1]];
+                        const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
+                                                                                                           sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
+                        if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -3949,7 +3977,7 @@ struct FinderPatternInfo {
         return false;
     }
 
-    pair<bool, Point2f> getQRCorner() {
+    pair<bool, Point2f> getQRCornerId() const {
         if (typePattern == TypePattern::CENTER) {
             return std::make_pair(true, points[(bestTotalId + 2) % 4]);
         }
@@ -3957,6 +3985,28 @@ struct FinderPatternInfo {
             return std::make_pair(true, points[(bestId[1] + 2) % 4]);
         }
         return std::make_pair(false, Point2f());
+    }
+
+    int getPerpId(TypePattern _typePattern) const {
+        if (typePattern == TypePattern::CENTER) {
+            if (_typePattern == TypePattern::RIGHT) {
+                return 0;
+            }
+            else if (_typePattern == TypePattern::BOTTOM) {
+                return 1;
+            }
+        }
+        else if (typePattern == TypePattern::RIGHT) {
+            if (_typePattern == TypePattern::CENTER) {
+                return 1;
+            }
+        }
+        else if (typePattern == TypePattern::BOTTOM) {
+            if (_typePattern == TypePattern::CENTER) {
+                return 0;
+            }
+        }
+        return -1;
     }
 
     float moduleSize = 0.f;
@@ -3970,13 +4020,8 @@ struct FinderPatternInfo {
     int bestScore = 0;
 
     float minQrAngle = 0.f; 
-    enum TypePattern {
-        CENTER,
-        RIGHT,
-        BOTTOM,
-        NONE
-    };
     TypePattern typePattern = NONE;
+
     Point2f center;
     vector<Point2f> points;
 
@@ -4030,8 +4075,10 @@ void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
     for (const FinderPatternInfo& centerPattern : patterns[FinderPatternInfo::TypePattern::CENTER]) {
         const FinderPatternInfo& rightPattern = patterns[FinderPatternInfo::TypePattern::RIGHT].back();
         const FinderPatternInfo& bottomPattern = patterns[FinderPatternInfo::TypePattern::BOTTOM].back();
+        if (centerPattern.compatibilityPattern(rightPattern) && centerPattern.compatibilityPattern(bottomPattern)) {
         std::array<FinderPatternInfo, 3> qr = {centerPattern, rightPattern, bottomPattern};
         qrCodes.push_back(qr);
+        }
     }
 }
 
