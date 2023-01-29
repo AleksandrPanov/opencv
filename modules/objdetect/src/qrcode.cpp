@@ -3926,13 +3926,22 @@ struct FinderPatternInfo {
 
     bool compatibilityPattern(const FinderPatternInfo& otherPattern) {
         if (typePattern == TypePattern::CENTER &&
-            (otherPattern.typePattern == TypePattern::BOTTOM || otherPattern.typePattern == TypePattern::RIGHT)) {
+            (otherPattern.typePattern == TypePattern::RIGHT || otherPattern.typePattern == TypePattern::BOTTOM)) {
             const float maxRotateDiff = (float)CV_PI/12.f; // 15 degrees
             if (abs(minQrAngle - otherPattern.minQrAngle) < maxRotateDiff) { // check 15 degrees
                 const float maxRelativeModuleDiff = 1.75f;
                 if (max(moduleSize, otherPattern.moduleSize) / min(moduleSize, otherPattern.moduleSize) < maxRelativeModuleDiff) {
-                    // need to use perpendiculars
-                    //if 
+                    Point2f qrDirect = center - otherPattern.center;
+                    // TODO: need add id to TypePattern method
+                    // perpendiculars[1] convert to -> perpendiculars[getIdByType()?]
+                    if (otherPattern.typePattern == TypePattern::RIGHT) {
+                        Point finderPatternDirect = otherPattern.perpendiculars[1][otherPattern.bestId[1]];
+                    }
+                    // TODO: TODO: need add id to TypePattern method
+                    // perpendiculars[0] convert to -> perpendiculars[getIdByType()?]
+                    else if (otherPattern.typePattern == TypePattern::BOTTOM) {
+                        Point finderPatternDirect = otherPattern.perpendiculars[0][otherPattern.bestId[1]];
+                    }
                 }
             }
         }
@@ -3983,17 +3992,21 @@ void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
             pattern.analyzeFinderPatternSide((int)j, true, img);
             pattern.analyzeFinderPatternSide((int)j, false, img);
         }
+        // TODO: move to analyzeFinderPatternSide
         if (pattern.bestTotalScore >= 14) {
             pattern.typePattern = FinderPatternInfo::TypePattern::CENTER;
             patterns[FinderPatternInfo::TypePattern::CENTER].push_back(pattern);
             //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
         }
+        //TODO: move to analyzeFinderPatternSide and add to parameters minBestScore and minBestTotalScore
         else if (pattern.bestScore >= 7) {
+            // TODO: need add id to TypePattern method
             if (pattern.bestId[0] == 1) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::RIGHT;
                 patterns[FinderPatternInfo::TypePattern::RIGHT].push_back(pattern);
-                //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+                circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
             }
+            // TODO: need add id to TypePattern method
             else if (pattern.bestId[0] == 0) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::BOTTOM;
                 patterns[FinderPatternInfo::TypePattern::BOTTOM].push_back(pattern);
