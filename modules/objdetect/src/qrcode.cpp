@@ -3939,36 +3939,12 @@ struct FinderPatternInfo {
                 // TODO: move maxRelativeModuleDiff to parameters
                 const float maxRelativeModuleDiff = 1.75f;
                 if (max(moduleSize, otherPattern.moduleSize) / min(moduleSize, otherPattern.moduleSize) < maxRelativeModuleDiff) {
-                    Point2f centerFindernPatternDirect = (Point2f)perpendiculars[getPerpId(otherPattern.typePattern)][bestTotalId];
-                    Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[otherPattern.getPerpId(TypePattern::CENTER)][otherPattern.bestId[1]];
-                    if (otherPattern.typePattern == TypePattern::RIGHT) {
-                        //Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[1][otherPattern.bestId[1]];
-                        const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
+                    Point2f centerFindernPatternDirect = getPerpTo(otherPattern.typePattern);
+                    Point2f otherFinderPatternDirect = otherPattern.getPerpTo(typePattern);
+                    const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
                                                                                                            sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
-                        if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
-                            return true;
-                        }
-                        // TODO: add to notepad and remove
-                        // Maybe used to find curve QR code ???
-                        //Point2f qrDirect = center - otherPattern.center;
-                        //const float cosAngle1 = qrDirect.dot(centerFindernPatternDirect) / (sqrt(normL2Sqr<float>(qrDirect)) *
-                        //                                                                    sqrt(normL2Sqr<float>((Point2f)centerFindernPatternDirect)));
-                        //if (acos(abs(cosAngle1)) < maxRotateDiff) { // check center pattern
-                        //    Point finderPatternDirect = otherPattern.perpendiculars[1][otherPattern.bestId[1]];
-                        //    const float cosAngle2 = qrDirect.dot(finderPatternDirect) / (sqrt(normL2Sqr<float>(qrDirect)) *
-                        //                                                                 sqrt(normL2Sqr<float>((Point2f)finderPatternDirect)));
-                        //    if (acos(cosAngle2) < maxRotateDiff) { // check other pattern
-                        //        return true;
-                        //    }
-                        //}
-                    }
-                    else if (otherPattern.typePattern == TypePattern::BOTTOM) {
-                        //Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[0][otherPattern.bestId[1]];
-                        const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
-                                                                                                           sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
-                        if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
-                            return true;
-                        }
+                    if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
+                        return true;
                     }
                 }
             }
@@ -3987,26 +3963,30 @@ struct FinderPatternInfo {
         return std::make_pair(false, Point2f());
     }
 
-    int getPerpId(TypePattern _typePattern) const {
+    Point2f getPerpTo(TypePattern _typePattern) const {
         if (typePattern == TypePattern::CENTER) {
             if (_typePattern == TypePattern::RIGHT) {
-                return 0;
+                int id = 0;
+                return perpendiculars[id][bestTotalId];
             }
             else if (_typePattern == TypePattern::BOTTOM) {
-                return 1;
+                int id = 1;
+                return perpendiculars[id][bestTotalId];
             }
         }
         else if (typePattern == TypePattern::RIGHT) {
             if (_typePattern == TypePattern::CENTER) {
-                return 1;
+                int id = 1;
+                return perpendiculars[id][bestId[1]];
             }
         }
         else if (typePattern == TypePattern::BOTTOM) {
             if (_typePattern == TypePattern::CENTER) {
-                return 0;
+                int id = 0;
+                return perpendiculars[id][bestId[1]];
             }
         }
-        return -1;
+        return Point2f(0.f, 0.f);
     }
 
     float moduleSize = 0.f;
