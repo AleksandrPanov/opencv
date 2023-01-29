@@ -3940,9 +3940,9 @@ struct FinderPatternInfo {
                 const float maxRelativeModuleDiff = 1.75f;
                 if (max(moduleSize, otherPattern.moduleSize) / min(moduleSize, otherPattern.moduleSize) < maxRelativeModuleDiff) {
                     Point2f centerFindernPatternDirect = (Point2f)perpendiculars[getPerpId(otherPattern.typePattern)][bestTotalId];
-                    Point2f otherFinderPatternDirect = (Point2f)perpendiculars[otherPattern.getPerpId(TypePattern::CENTER)][bestTotalId];
+                    Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[otherPattern.getPerpId(TypePattern::CENTER)][otherPattern.bestId[1]];
                     if (otherPattern.typePattern == TypePattern::RIGHT) {
-                        Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[1][otherPattern.bestId[1]];
+                        //Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[1][otherPattern.bestId[1]];
                         const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
                                                                                                            sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
                         if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
@@ -3963,7 +3963,7 @@ struct FinderPatternInfo {
                         //}
                     }
                     else if (otherPattern.typePattern == TypePattern::BOTTOM) {
-                        Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[0][otherPattern.bestId[1]];
+                        //Point2f otherFinderPatternDirect = (Point2f)otherPattern.perpendiculars[0][otherPattern.bestId[1]];
                         const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
                                                                                                            sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
                         if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
