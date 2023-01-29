@@ -3931,7 +3931,7 @@ struct FinderPatternInfo {
         }
     }
 
-    bool compatibilityPattern(const FinderPatternInfo& otherPattern) const {
+    float compatibilityPattern(const FinderPatternInfo& otherPattern) const {
         if (typePattern == TypePattern::CENTER &&
             (otherPattern.typePattern == TypePattern::RIGHT || otherPattern.typePattern == TypePattern::BOTTOM)) {
             const float maxRotateDiff = (float)CV_PI/12.f; // 15 degrees
@@ -3942,15 +3942,14 @@ struct FinderPatternInfo {
                     Point2f centerFindernPatternDirect = getPerpTo(otherPattern.typePattern);
                     Point2f otherFinderPatternDirect = otherPattern.getPerpTo(typePattern);
                     const float cosAngle = centerFindernPatternDirect.dot(otherFinderPatternDirect) / (sqrt(normL2Sqr<float>(otherFinderPatternDirect)) *
-                                                                                                           sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
+                                                                                                       sqrt(normL2Sqr<float>(centerFindernPatternDirect)));
                     if (cosAngle < 0 && acos(-cosAngle) < maxRotateDiff) {
-                        return true;
+                        return sqrt(normL2Sqr<float>(center - otherPattern.center));
                     }
                 }
             }
-        }
-        
-        return false;
+        }     
+        return -1.f;
     }
 
     pair<bool, Point2f> getQRCornerId() const {
@@ -4055,7 +4054,7 @@ void analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
     for (const FinderPatternInfo& centerPattern : patterns[FinderPatternInfo::TypePattern::CENTER]) {
         const FinderPatternInfo& rightPattern = patterns[FinderPatternInfo::TypePattern::RIGHT].back();
         const FinderPatternInfo& bottomPattern = patterns[FinderPatternInfo::TypePattern::BOTTOM].back();
-        if (centerPattern.compatibilityPattern(rightPattern) && centerPattern.compatibilityPattern(bottomPattern)) {
+        if (centerPattern.compatibilityPattern(rightPattern) > 0.f && centerPattern.compatibilityPattern(bottomPattern) > 0.f) {
         std::array<FinderPatternInfo, 3> qr = {centerPattern, rightPattern, bottomPattern};
         qrCodes.push_back(qr);
         }
