@@ -4128,7 +4128,7 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
                 for (Point2f& corner : qr.getQRCorners()) {
                     result.push_back(corner);
                 }
-                std::cout << qr.getQRCorners() << std::endl << std::endl;
+                //std::cout << qr.getQRCorners() << std::endl << std::endl;
             }
             
         }
