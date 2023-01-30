@@ -3913,14 +3913,29 @@ struct FinderPatternInfo {
                 if (bestTotalScore < timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId]) {
                     bestTotalId = curPointId;
                     bestTotalScore = timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId];
-                    //bestTotalTimingEnd[]
                 }
                 if (bestScore < timingScores[clockwise][curPointId] || bestScore < timingScores[!clockwise][curPointId]) {
                     // there may be false positives
-                    // check next best pattern ???
+                    // add check next best pattern ???
+                    // TODO: could use line check to avoid fake timing pattern ???
+
                     bestId[0] = clockwise;
                     bestId[1] = curPointId;
                     bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
+                    // try to use rectangle check:
+                    /*int size = cvRound(moduleSize*7.f);
+                    Rect2i checkRectangle(cvRound(checkDirectionEnd.x - size), cvRound(checkDirectionEnd.y - size), 2*size, 2*size);
+                    if (imageRect.contains(checkRectangle.br()) && imageRect.contains(checkRectangle.tl())) {
+                        Mat tmp(img, checkRectangle);
+                        const int nonZero = countNonZero(tmp);
+                        const int zero = (int)tmp.total() - nonZero;
+                        const float relDiff = (float)abs(zero - nonZero) / (float)tmp.total();
+                        if (relDiff < 0.19f) {
+                            bestId[0] = clockwise;
+                            bestId[1] = curPointId;
+                            bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
+                        }
+                    }*/
                 }
             }
             else if (colorCounter > 8) { 
@@ -3936,6 +3951,8 @@ struct FinderPatternInfo {
             //}
         }
     }
+
+
 
     float compatibilityPattern(const FinderPatternInfo& otherPattern) const {
         if (typePattern == TypePattern::CENTER &&
@@ -4169,8 +4186,8 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     if (corners.size() > 0ull) {
         Mat binImage;
         adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
-        //imshow("binImage", binImage);
-        //waitKey(0);
+        imshow("binImage", binImage);
+        waitKey(0);
         vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
         if (qrCodes.size() == 0ull)
             return false;
