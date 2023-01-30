@@ -3907,7 +3907,7 @@ struct FinderPatternInfo {
             //std::cout << "colorCounter " << colorCounter << std::endl;
             const int maxNumModules = 8; // the maximum number of modules is 8
             const int minNumModules = 6; // set 6 out of 8 modules as valid result
-            if (colorCounter > minNumModules && maxNumModules <= maxNumModules) { 
+            if (colorCounter > minNumModules && colorCounter <= maxNumModules) { 
                 timingScores[clockwise][curPointId] = colorCounter;
                 // timingEnd[clockwise][curPointId] = checkDirectionEnd;
                 if (bestTotalScore < timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId]) {
@@ -3916,12 +3916,14 @@ struct FinderPatternInfo {
                     //bestTotalTimingEnd[]
                 }
                 if (bestScore < timingScores[clockwise][curPointId] || bestScore < timingScores[!clockwise][curPointId]) {
+                    // there may be false positives
+                    // check next best pattern ???
                     bestId[0] = clockwise;
                     bestId[1] = curPointId;
                     bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
                 }
             }
-            else if (colorCounter > 8) {
+            else if (colorCounter > 8) { 
                 colorCounter = 0;
                 CV_LOG_WARNING(NULL, "analyzeFinderPatternSide found too many modules, try to change parameters in"
                                      "adaptiveThreshold" << colorCounter);
@@ -4058,7 +4060,7 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
         if (pattern.bestTotalScore >= 14) {
             pattern.typePattern = FinderPatternInfo::TypePattern::CENTER;
             patterns[FinderPatternInfo::TypePattern::CENTER].push_back(pattern);
-            //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+            circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
         }
         //TODO: move to analyzeFinderPatternSide and add to parameters minBestScore and minBestTotalScore
         else if (pattern.bestScore >= 7) {
@@ -4066,13 +4068,13 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
             if (pattern.bestId[0] == 1) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::RIGHT;
                 patterns[FinderPatternInfo::TypePattern::RIGHT].push_back(pattern);
-                //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+                circle(img, pattern.center, 10, Scalar(127/2, 127/2, 127/2), FILLED, LINE_8);
             }
             // TODO: need add id to TypePattern method
             else if (pattern.bestId[0] == 0) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::BOTTOM;
                 patterns[FinderPatternInfo::TypePattern::BOTTOM].push_back(pattern);
-                //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+                circle(img, pattern.center, 10, Scalar(127*1.5, 127*1.5, 127*1.5), FILLED, LINE_8);
             }
             else {
                 CV_Error(cv::Error::StsBadArg, "Invalid argument value, clockwise must be 0 or 1");
@@ -4129,11 +4131,10 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
                 bottomPattern = patterns[FinderPatternInfo::TypePattern::BOTTOM][bestIdBottom];
                 swap(patterns[FinderPatternInfo::TypePattern::BOTTOM][bestIdBottom], patterns[FinderPatternInfo::TypePattern::BOTTOM].back());
                 patterns[FinderPatternInfo::TypePattern::BOTTOM].pop_back();
+                qrCodes.push_back({centerPattern, rightPattern, bottomPattern});
             }
         }
-        qrCodes.push_back({centerPattern, rightPattern, bottomPattern});
     }
-
     return qrCodes;
 }
 
@@ -4182,8 +4183,8 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
         }
         updatePointsResult(points, result);
         //std::cout << result << std::endl;
-        //imshow("binImage", binImage);
-        //waitKey(0);
+        imshow("binImage", binImage);
+        waitKey(0);
         //imwrite("binImage.png", binImage);
         return true;
     }
