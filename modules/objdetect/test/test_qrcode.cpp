@@ -784,14 +784,14 @@ TEST(Objdetect_QRCode_decodeMulti, decode_9_qrcodes_version7)
 
 TEST(Objdetect_QRCode_detectMulti, test_aruco)
 {
-    const std::string name_current_image = "version_5_top.jpg";
+    //const std::string name_current_image = "version_5_top.jpg";
     //const std::string name_current_image = "version_5_top_rotate180.jpg";
     //const std::string name_current_image = "version_5_top_rotate270.jpg";
     //const std::string name_current_image = "issue_21287.png";
-    //const std::string name_current_image = "9_qrcodes_version7.jpg";
+    const std::string name_current_image = "9_qrcodes_version7.jpg";
     //const std::string name_current_image = "image001.jpg";
-    const std::string root = "qrcode/";
-    //const std::string root = "qrcode/multiple/";
+    //const std::string root = "qrcode/";
+    const std::string root = "qrcode/multiple/";
 
     std::string image_path = findDataFile(root + name_current_image);
     Mat src = imread(image_path);
@@ -799,7 +799,8 @@ TEST(Objdetect_QRCode_detectMulti, test_aruco)
     std::vector<Point> corners;
     
     vector<Point2f> res;
-    qrcode.detectMultiAruco(src, res);
+    //qrcode.detectMultiAruco(src, res);
+    qrcode.detectMulti(src, res);
 }
 
 #endif // UPDATE_QRCODE_TEST_DATA

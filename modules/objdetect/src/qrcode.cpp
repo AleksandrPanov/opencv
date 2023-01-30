@@ -3812,7 +3812,7 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     return true;
 }
 
-bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
+/*bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
 {
     Mat inarr;
     if (!checkQRInputImage(in, inarr))
@@ -3837,7 +3837,7 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     updatePointsResult(points, trans_points);
 
     return true;
-}
+}*/
 
 struct FinderPatternInfo {
 
@@ -4066,7 +4066,7 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
             if (pattern.bestId[0] == 1) {
                 pattern.typePattern = FinderPatternInfo::TypePattern::RIGHT;
                 patterns[FinderPatternInfo::TypePattern::RIGHT].push_back(pattern);
-                circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
+                //circle(img, pattern.center, 10, Scalar(127, 127, 127), FILLED, LINE_8);
             }
             // TODO: need add id to TypePattern method
             else if (pattern.bestId[0] == 0) {
@@ -4137,7 +4137,7 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
     return qrCodes;
 }
 
-bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
+bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
 {
     Mat gray;
     if (!checkQRInputImage(in, gray))
@@ -4169,14 +4169,20 @@ bool QRCodeDetector::detectMultiAruco(InputArray in, OutputArray points) const
         //imshow("binImage", binImage);
         //waitKey(0);
         vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
+        if (qrCodes.size() == 0ull)
+            return false;
+        vector<Point2f> result;
         if (qrCodes.size() > 0ull) {
             for (auto& qr : qrCodes) {
-                std::cout << qr.getQRCorners();
+                for (Point2f& corner : qr.getQRCorners())
+                    result.push_back(corner);
             }
         }
-        imshow("binImage", binImage);
-        waitKey(0);
-        imwrite("binImage.png", binImage);
+        updatePointsResult(points, result);
+        std::cout << result << std::endl;
+        //imshow("binImage", binImage);
+        //waitKey(0);
+        //imwrite("binImage.png", binImage);
     }
     return true;
 }
