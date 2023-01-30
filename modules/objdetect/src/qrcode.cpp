@@ -3853,7 +3853,7 @@ struct FinderPatternInfo {
         moduleSize /= (4.f * 7.f); // 4 sides, 7 modules in one side
         center /= 4.f;
         minQrAngle = asin(minSin);
-        std::cout << "minQrAngle " << minQrAngle << std::endl;
+        //std::cout << "minQrAngle " << minQrAngle << std::endl;
         //std::cout << "minSin " << minSin << std::endl;
     }
 
@@ -3904,7 +3904,7 @@ struct FinderPatternInfo {
                     colorCounter++;
                 }
             }
-            std::cout << "colorCounter " << colorCounter << std::endl;
+            //std::cout << "colorCounter " << colorCounter << std::endl;
             const int maxNumModules = 8; // the maximum number of modules is 8
             const int minNumModules = 6; // set 6 out of 8 modules as valid result
             if (colorCounter > minNumModules && maxNumModules <= maxNumModules) { 
@@ -4084,8 +4084,8 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
             patterns[FinderPatternInfo::TypePattern::NONE].push_back(pattern);
         }
 
-        std::cout << "pattern.moduleSize " << pattern.moduleSize << std::endl;
-        std::cout << "pattern.bestTotalScore " << pattern.bestTotalScore << std::endl;
+        //std::cout << "pattern.moduleSize " << pattern.moduleSize << std::endl;
+        //std::cout << "pattern.bestTotalScore " << pattern.bestTotalScore << std::endl;
     }
 
     for (const FinderPatternInfo& centerPattern : patterns[FinderPatternInfo::TypePattern::CENTER]) {
@@ -4156,7 +4156,9 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
             bits.at<uint8_t>(i+1, j+1) = 0;
     Mat byteList = Dictionary::getByteListFromBits(bits);
     Dictionary dictionary = Dictionary(byteList, 5, 4);
-    ArucoDetector arucoDetector(dictionary);
+    DetectorParameters parameters;
+    //parameters.cornerRefinementMethod = CornerRefineMethod::CORNER_REFINE_SUBPIX;
+    ArucoDetector arucoDetector(dictionary, parameters);
 
     vector<vector<Point2f> > corners;
     vector<vector<Point2f> > rejectedCorners;
@@ -4179,12 +4181,13 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
             }
         }
         updatePointsResult(points, result);
-        std::cout << result << std::endl;
+        //std::cout << result << std::endl;
         //imshow("binImage", binImage);
         //waitKey(0);
         //imwrite("binImage.png", binImage);
+        return true;
     }
-    return true;
+    return false;
 }
 
 class ParallelDecodeProcess : public ParallelLoopBody
