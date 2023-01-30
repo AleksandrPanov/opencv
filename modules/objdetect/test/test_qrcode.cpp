@@ -784,12 +784,12 @@ TEST(Objdetect_QRCode_decodeMulti, decode_9_qrcodes_version7)
 
 TEST(Objdetect_QRCode_detectMulti, test_aruco)
 {
-    //const std::string name_current_image = "version_5_top.jpg";
+    const std::string name_current_image = "version_5_top.jpg";
     //const std::string name_current_image = "version_5_top_rotate180.jpg";
     //const std::string name_current_image = "version_5_top_rotate270.jpg";
     //const std::string name_current_image = "issue_21287.png";
     //const std::string name_current_image = "9_qrcodes_version7.jpg";
-    const std::string name_current_image = "image019.jpg";
+    //const std::string name_current_image = "image019.jpg";
     //const std::string name_current_image = "image001.jpg";
     const std::string root = "qrcode/";
     //const std::string root = "qrcode/multiple/";
