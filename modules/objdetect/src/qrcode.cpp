@@ -3939,7 +3939,7 @@ struct FinderPatternInfo {
         return std::make_pair(-1, Point2f());
     }
 
-    Point2f getTimingStart(TypePattern direction) {
+    Point2f getTimingStart(TypePattern direction) const {
         Point2f start = points[bestTotalId]*(6.5f/7.f);
         if (typePattern == TypePattern::CENTER && direction == TypePattern::RIGHT) {
             start += points[(bestTotalId + 3) % 4]*(0.5f/7.f);
@@ -3956,7 +3956,7 @@ struct FinderPatternInfo {
         return start + getDirectionTo(direction)/(7.f*2.f);
     }
 
-    int calculateTimingPattern(Point2f start, Point2f end, Mat &img) {
+    int calculateTimingPattern(Point2f start, Point2f end, Mat &img) const {
         Rect imageRect(Point(), img.size());
         int colorCounter = 0;
         if (imageRect.contains(Point(cvRound(end.x), cvRound(end.y)))) {
@@ -3973,8 +3973,8 @@ struct FinderPatternInfo {
                 if (prevValue != value) {
                     const float dist = sqrt(normL2Sqr<float>((Point2f)(vec.back()-lineIterator.pos())));
                     // check long and short lines
-                    // TODO: add to parameters
                     const float relativeDif = max(moduleSize, dist)/min(moduleSize, dist);
+                    const float maxRelativeModuleDiff = 1.5f; // TODO: remove or add to parameters
                     if (vec.size() == 1 && relativeDif > maxRelativeModuleDiff * 2.f) // start in center module
                         break;
                     else if (vec.size() >= 2 && relativeDif > maxRelativeModuleDiff)
@@ -3988,7 +3988,7 @@ struct FinderPatternInfo {
         return colorCounter;
     }
 
-    bool checkTimingPattern(TypePattern direction, Mat& img) {
+    bool checkTimingPattern(TypePattern direction, Mat& img) const {
         Point2f start = getTimingStart(direction);
         Point2f end = start + getDirectionTo(direction);
         int colorCounter = calculateTimingPattern(start, end, img);
@@ -4106,8 +4106,14 @@ struct QRCode {
                             pattern3.setType(FinderPatternInfo::TypePattern::BOTTOM, centerQR);
                             ok = pattern1.checkAngle(pattern3);
                             if (ok) {
-                                // TODO: add intersection check
-                                distance = sides[0] + sides[1];
+                                // intersection check
+                                Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.center,
+                                                               pattern2.getQRCorner().second, pattern2.center);
+                                Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.center,
+                                                               pattern3.getQRCorner().second, pattern3.center);
+                                float moduleSize = (pattern1.moduleSize + pattern2.moduleSize + pattern3.moduleSize) / 3.f;
+                                if (sqrt(normL2Sqr<float>(c1 - c2)) < 8.f*moduleSize)
+                                    distance = sides[0] + sides[1];
                             }
                         }
                     }
@@ -4123,16 +4129,36 @@ struct QRCode {
                                                       centerPattern.getTimingStart(FinderPatternInfo::CENTER), img);
         int v2 = centerPattern.calculateTimingPattern(rightPattern.getTimingStart(FinderPatternInfo::CENTER),
                                                       centerPattern.getTimingStart(FinderPatternInfo::CENTER), img);
-        if (v1 >= 6 && v2 >= 6 && abs(v1 - v2) <= 2)
+        const float moduleSize = (centerPattern.moduleSize + rightPattern.moduleSize + bottomPattern.moduleSize) / 3.f;
+        float numModules = (sqrt(normL2Sqr<float>((centerPattern.getQRCorner().second - rightPattern.getQRCorner().second)))*0.5f + 
+                            sqrt(normL2Sqr<float>((centerPattern.getQRCorner().second - bottomPattern.getQRCorner().second))*0.5f)) / moduleSize;
+
+        // TODO: fixed accurucy calculateTimingPattern
+        // abs(cvRound(numModules) - (14 + max(v1, v2)))/4 <= 6
+        if (v1 >= 6 && v2 >= 6 && abs(v1 - v2) <= 3 && abs(cvRound(numModules) - (14 + max(v1, v2)))/4 <= 6)
             return 14 + max(v1, v2);
         return 0;
     }
 
-    bool checkTimingPattern(Mat &img) {
+    bool checkTimingPattern(Mat &img) const {
         return centerPattern.checkTimingPattern(FinderPatternInfo::TypePattern::RIGHT, img) &
                centerPattern.checkTimingPattern(FinderPatternInfo::TypePattern::BOTTOM, img) &
                rightPattern.checkTimingPattern(FinderPatternInfo::TypePattern::CENTER, img) &
                bottomPattern.checkTimingPattern(FinderPatternInfo::TypePattern::CENTER, img);
+    }
+
+    float getMaxModuleSize() const {
+        return max(centerPattern.moduleSize, max(rightPattern.moduleSize, bottomPattern.moduleSize));
+    }
+
+    QRCode& operator*(const float scale) {
+        centerPattern = centerPattern * scale;
+        rightPattern = rightPattern * scale;
+        bottomPattern = bottomPattern * scale;
+        center *= scale;
+        if (distance != std::numeric_limits<float>::max())
+            distance *= scale;
+        return *this;
     }
 
     FinderPatternInfo centerPattern;
@@ -4146,11 +4172,15 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
     vector<QRCode> qrCodes;
     vector<FinderPatternInfo> patterns;
 
-    //Mat copy1 = img.clone();
+    Mat reduceImg;
+    const float scaleFactor = 4.f;
+    resize(img, reduceImg, Size(img.cols / scaleFactor, img.rows / scaleFactor), INTER_NEAREST);
+    
     for (size_t i = 0ull; i < corners.size(); i++) {
         patterns.push_back(FinderPatternInfo(corners[i]));
         //circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
     }
+    Mat copy = img.clone();
     //float scale = (float)copy1.rows / 1200.f;
     //if (scale > 1.f) {
     //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
@@ -4167,27 +4197,33 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
             for (size_t j = i + 1ull; j < patterns.size(); j++) {
                 for (size_t k = j + 1ull; k < patterns.size(); k++) {
                     QRCode tmp = QRCode::checkCompatibilityPattern(patterns[i], patterns[j], patterns[k]);
-                    if (tmp.distance < qrCode.distance) {
-                        int res = tmp.calculateModulesByTimingPattern(img);
+                    if (tmp.distance < qrCode.distance) { // != std::numeric_limits<float>::max()) { //
+                        bool bigQR = tmp.getMaxModuleSize() > 19.f ? true : false;
+                        Mat& refImg = bigQR ? reduceImg : img;
+                        if (bigQR){
+                            std::cout << "bigQR" << std::endl;
+                            tmp = tmp * (1.f/scaleFactor);
+                        }
+                        int res = tmp.calculateModulesByTimingPattern(refImg);
                         if (res) {
+                            if (bigQR)
+                                tmp = tmp*scaleFactor;
                             qrCode = tmp;
                             flag = true;
                             indexes[0] = (int)i;
                             indexes[1] = (int)j;
                             indexes[2] = (int)k;
-                            goto add_qr; // TODO: removed?
+                            //goto to flag; // TODO: removed?
                         } 
                     }
                 }
             }
         }
-add_qr: if (flag) {
-            //std::cout << "ANGLE rightPattern " << qrCode.centerPattern.getCosAngle(qrCode.rightPattern) << std::endl;
-            //std::cout << "ANGLE bottomPattern " << qrCode.centerPattern.getCosAngle(qrCode.bottomPattern) << std::endl;
+            if (flag) {
             //Mat copy = img.clone();
-            //circle(copy, qrCode.centerPattern.center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
-            //circle(copy, qrCode.rightPattern.center, 30, Scalar(64, 64, 64), FILLED, LINE_8);
-            //circle(copy, qrCode.bottomPattern.center, 30, Scalar(191, 191, 191), FILLED, LINE_8);
+            circle(copy, qrCode.centerPattern.center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
+            circle(copy, qrCode.rightPattern.center, 30, Scalar(64, 64, 64), FILLED, LINE_8);
+            circle(copy, qrCode.bottomPattern.center, 30, Scalar(191, 191, 191), FILLED, LINE_8);
             //float scale = (float)copy.rows / 1200.f;
             //if (scale > 1.f) {
             //    resize(copy, copy, Size(copy.cols / scale, copy.rows / scale));
@@ -4205,7 +4241,12 @@ add_qr: if (flag) {
             patterns.pop_back();
         }
     }
-
+    float scale = (float)copy.rows / 1200.f;
+    if (scale > 1.f) {
+        resize(copy, copy, Size(copy.cols / scale, copy.rows / scale));
+    }
+    imshow("1", copy);
+    waitKey(0);
     return qrCodes;
 }
 
@@ -4242,10 +4283,10 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
         adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
         Mat copy1 = binImage.clone();
         float scale = (float)copy1.rows / 1200.f;
-        if (scale > 1.f) {
-            resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
-        }
-        imshow("binImage", copy1);
+        //if (scale > 1.f) {
+        //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+        //}
+        //imshow("binImage", copy1);
         waitKey(0);
         vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
         if (qrCodes.size() == 0ull)
