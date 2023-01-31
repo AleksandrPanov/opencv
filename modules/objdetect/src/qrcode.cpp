@@ -3908,6 +3908,13 @@ struct FinderPatternInfo {
         return false;
     }
 
+    float getCosAngle(const FinderPatternInfo& other) {
+        Point2f toOther = getDirectionTo(other.typePattern);
+        Point2f toThis = other.getDirectionTo(typePattern);
+        const float cosAngle = toOther.dot(toThis) / (sqrt(normL2Sqr<float>(toOther)) * sqrt(normL2Sqr<float>(toThis)));
+        return cosAngle;
+    }
+
     pair<int, Point2f> getQRCorner() const {
         if (typePattern == TypePattern::CENTER) {
             int id = (bestTotalId + 2) % 4;
@@ -3930,6 +3937,77 @@ struct FinderPatternInfo {
             return std::make_pair(id, points[id]);
         }
         return std::make_pair(-1, Point2f());
+    }
+
+    Point2f getTimingStart(TypePattern direction) {
+        Point2f start = points[bestTotalId]*(6.5f/7.f);
+        if (typePattern == TypePattern::CENTER && direction == TypePattern::RIGHT) {
+            start += points[(bestTotalId + 3) % 4]*(0.5f/7.f);
+        }
+        else if (typePattern == TypePattern::CENTER && direction == TypePattern::BOTTOM) {
+            start += points[(bestTotalId + 1) % 4]*(0.5f/7.f);
+        }
+        else if (typePattern == TypePattern::RIGHT && direction == TypePattern::CENTER) {
+            start += points[(bestTotalId + 1) % 4]*(0.5f/7.f);
+        }
+        else if (typePattern == TypePattern::BOTTOM && direction == TypePattern::CENTER) {
+            start += points[(bestTotalId + 3) % 4]*(0.5f/7.f);
+        }
+        return start + getDirectionTo(direction)/(7.f*2.f);
+    }
+
+    int calculateTimingPattern(Point2f start, Point2f end, Mat &img) {
+        Rect imageRect(Point(), img.size());
+        int colorCounter = 0;
+        if (imageRect.contains(Point(cvRound(end.x), cvRound(end.y)))) {
+            LineIterator lineIterator(start, end);
+            uint8_t prevValue = img.at<uint8_t>(lineIterator.pos());
+
+            vector<Point> vec = {lineIterator.pos()};
+
+            lineIterator++;
+            colorCounter++;
+
+            for(int i = 1; i < lineIterator.count; i++, ++lineIterator) {
+                const uint8_t value = img.at<uint8_t>(lineIterator.pos());
+                if (prevValue != value) {
+                    const float dist = sqrt(normL2Sqr<float>((Point2f)(vec.back()-lineIterator.pos())));
+                    // check long and short lines
+                    // TODO: add to parameters
+                    const float relativeDif = max(moduleSize, dist)/min(moduleSize, dist);
+                    if (vec.size() == 1 && relativeDif > maxRelativeModuleDiff * 2.f) // start in center module
+                        break;
+                    else if (vec.size() >= 2 && relativeDif > maxRelativeModuleDiff)
+                        break;
+                    vec.push_back(lineIterator.pos());
+                    prevValue = value;
+                    colorCounter++;
+                }
+            }
+        }
+        return colorCounter;
+    }
+
+    bool checkTimingPattern(TypePattern direction, Mat& img) {
+        Point2f start = getTimingStart(direction);
+        Point2f end = start + getDirectionTo(direction);
+        int colorCounter = calculateTimingPattern(start, end, img);
+
+        //std::cout << "colorCounter " << colorCounter << std::endl;
+        const int maxNumModules = 9; // the maximum number of modules is 8
+        const int minNumModules = 6; // set 6 out of 8 modules as valid result
+        if (colorCounter > minNumModules && colorCounter <= maxNumModules) {
+            return true;
+        }
+        return false;
+    }
+
+    FinderPatternInfo& operator*(const float scale) {
+        moduleSize *= scale;
+        center *= scale;
+        for (auto& point: points)
+            point *= scale;
+        return *this;
     }
 
     float moduleSize = 0.f;
@@ -4009,23 +4087,28 @@ struct QRCode {
                     // now pattern1 is centerPattern
                     centerQR = (pattern2.center + pattern3.center) / 2.f;
                     pattern1.setType(FinderPatternInfo::TypePattern::CENTER, centerQR);
-                    // check that pattern2 is right
-                    pattern2.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
-                    bool ok = pattern1.checkAngle(pattern2);
-                    if (!ok) {
-                        // check that pattern3 is right
-                        pattern3.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
-                        ok = pattern1.checkAngle(pattern3);
-                        if (ok)
-                            std::swap(pattern3, pattern2); // now pattern2 is rightPattern
-                    }
-                    if (ok) {
-                        // check that pattern3 is bottom
-                        pattern3.setType(FinderPatternInfo::TypePattern::BOTTOM, centerQR);
-                        ok = pattern1.checkAngle(pattern3);
+
+                    // check triangle angle
+                    const float angle = acos((pattern1.center - pattern2.center).dot((pattern1.center - pattern3.center)) / (sides[0]*sides[1]));
+                    if (angle > CV_PI / 6.f && angle < (5.f * CV_PI / 6.f)) {
+                        // check that pattern2 is right
+                        pattern2.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
+                        bool ok = pattern1.checkAngle(pattern2);
+                        if (!ok) {
+                            // check that pattern3 is right
+                            pattern3.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
+                            ok = pattern1.checkAngle(pattern3);
+                            if (ok)
+                                std::swap(pattern3, pattern2); // now pattern2 is rightPattern
+                        }
                         if (ok) {
-                            // TODO: add intersection check
-                            distance = sides[0] + sides[1];
+                            // check that pattern3 is bottom
+                            pattern3.setType(FinderPatternInfo::TypePattern::BOTTOM, centerQR);
+                            ok = pattern1.checkAngle(pattern3);
+                            if (ok) {
+                                // TODO: add intersection check
+                                distance = sides[0] + sides[1];
+                            }
                         }
                     }
                 }
@@ -4035,6 +4118,22 @@ struct QRCode {
         return qrcode;
     }
 
+    int calculateModulesByTimingPattern(Mat &img) {
+        int v1 = centerPattern.calculateTimingPattern(rightPattern.getTimingStart(FinderPatternInfo::CENTER),
+                                                      centerPattern.getTimingStart(FinderPatternInfo::CENTER), img);
+        int v2 = centerPattern.calculateTimingPattern(rightPattern.getTimingStart(FinderPatternInfo::CENTER),
+                                                      centerPattern.getTimingStart(FinderPatternInfo::CENTER), img);
+        if (v1 >= 6 && v2 >= 6 && abs(v1 - v2) <= 2)
+            return 14 + max(v1, v2);
+        return 0;
+    }
+
+    bool checkTimingPattern(Mat &img) {
+        return centerPattern.checkTimingPattern(FinderPatternInfo::TypePattern::RIGHT, img) &
+               centerPattern.checkTimingPattern(FinderPatternInfo::TypePattern::BOTTOM, img) &
+               rightPattern.checkTimingPattern(FinderPatternInfo::TypePattern::CENTER, img) &
+               bottomPattern.checkTimingPattern(FinderPatternInfo::TypePattern::CENTER, img);
+    }
 
     FinderPatternInfo centerPattern;
     FinderPatternInfo rightPattern;
@@ -4047,9 +4146,17 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
     vector<QRCode> qrCodes;
     vector<FinderPatternInfo> patterns;
 
+    //Mat copy1 = img.clone();
     for (size_t i = 0ull; i < corners.size(); i++) {
         patterns.push_back(FinderPatternInfo(corners[i]));
+        //circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
     }
+    //float scale = (float)copy1.rows / 1200.f;
+    //if (scale > 1.f) {
+    //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+    //}
+    //imshow("1", copy1);
+    //waitKey(0);
 
     bool flag = true;
     int indexes[3] = {0};
@@ -4061,24 +4168,40 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
                 for (size_t k = j + 1ull; k < patterns.size(); k++) {
                     QRCode tmp = QRCode::checkCompatibilityPattern(patterns[i], patterns[j], patterns[k]);
                     if (tmp.distance < qrCode.distance) {
-                        qrCode = tmp;
-                        flag = true;
-                        indexes[0] = (int)i;
-                        indexes[1] = (int)j;
-                        indexes[2] = (int)k;
+                        int res = tmp.calculateModulesByTimingPattern(img);
+                        if (res) {
+                            qrCode = tmp;
+                            flag = true;
+                            indexes[0] = (int)i;
+                            indexes[1] = (int)j;
+                            indexes[2] = (int)k;
+                            goto add_qr; // TODO: removed?
+                        } 
                     }
                 }
             }
         }
-        if (flag) {
+add_qr: if (flag) {
+            //std::cout << "ANGLE rightPattern " << qrCode.centerPattern.getCosAngle(qrCode.rightPattern) << std::endl;
+            //std::cout << "ANGLE bottomPattern " << qrCode.centerPattern.getCosAngle(qrCode.bottomPattern) << std::endl;
+            //Mat copy = img.clone();
+            //circle(copy, qrCode.centerPattern.center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
+            //circle(copy, qrCode.rightPattern.center, 30, Scalar(64, 64, 64), FILLED, LINE_8);
+            //circle(copy, qrCode.bottomPattern.center, 30, Scalar(191, 191, 191), FILLED, LINE_8);
+            //float scale = (float)copy.rows / 1200.f;
+            //if (scale > 1.f) {
+            //    resize(copy, copy, Size(copy.cols / scale, copy.rows / scale));
+            //}
+            //imshow("1", copy);
+            //waitKey(0);
             qrCodes.push_back(qrCode);
             std::sort(indexes, indexes+3);
   
-            std::swap(patterns[indexes[2]], patterns[patterns.size() - 1]);
+            std::swap(patterns[indexes[2]], patterns.back());
             patterns.pop_back();
-            std::swap(patterns[indexes[1]], patterns[patterns.size() - 1]);
+            std::swap(patterns[indexes[1]], patterns.back());
             patterns.pop_back();
-            std::swap(patterns[indexes[0]], patterns[patterns.size() - 1]);
+            std::swap(patterns[indexes[0]], patterns.back());
             patterns.pop_back();
         }
     }
@@ -4117,8 +4240,13 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     if (corners.size() >= 3ull) {
         Mat binImage;
         adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
-        //imshow("binImage", binImage);
-        //waitKey(0);
+        Mat copy1 = binImage.clone();
+        float scale = (float)copy1.rows / 1200.f;
+        if (scale > 1.f) {
+            resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+        }
+        imshow("binImage", copy1);
+        waitKey(0);
         vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
         if (qrCodes.size() == 0ull)
             return false;
