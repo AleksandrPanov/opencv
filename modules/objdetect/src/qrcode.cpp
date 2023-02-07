@@ -3899,21 +3899,60 @@ struct FinderPatternInfo {
         return res;
     }
 
+    float checkMaxRotateDiff(const FinderPatternInfo& other) {
+        const float diff = abs(minQrAngle - other.minQrAngle);
+        if (diff > maxRotateDiff)
+            return -1.f;
+        return diff / maxRotateDiff;
+    }
+
+    float checkRelativeSize(const FinderPatternInfo& other) {
+        const float diff = max(moduleSize, other.moduleSize) / min(moduleSize, other.moduleSize);
+        if (diff > maxRelativeModuleDiff)
+            return -1.f;
+        return diff / maxRelativeModuleDiff;
+    }
+
+    float checkTriangleAngle(const FinderPatternInfo& pattern2, const FinderPatternInfo& pattern3, const float length2Vec) {
+        const float angle = abs((float)CV_PI/2.f - acos((center - pattern2.center).dot((center - pattern3.center)) / length2Vec));
+        // triangle angle shoud be between 30 and 150 degrees
+        // abs(pi/2 - triangle_angle) should be less 60 degrees
+        const float maxTriangleDeltaAngle = (float)CV_PI / 3.f;
+        if (angle > maxTriangleDeltaAngle) { // 60 degrees
+            return -1.f;
+        }
+        return angle / maxRotateDiff;    
+    }
+
+
     bool checkAngle(const FinderPatternInfo& other) {
         Point2f toOther = getDirectionTo(other.typePattern);
         Point2f toThis = other.getDirectionTo(typePattern);
-        const float cosAngle = toOther.dot(toThis) / (sqrt(normL2Sqr<float>(toOther)) * sqrt(normL2Sqr<float>(toThis)));
-        if (cosAngle < 0.f && (CV_PI - acos(cosAngle)) / 2.f < maxRotateDiff)
-            return true;
+        const float cosAngle = getCosAngle(toOther, toThis);
+        //const float angle = ((float)CV_PI - acos(cosAngle)) / 2.f;
+        if (cosAngle < 0.f && (CV_PI - acos(cosAngle)) / 2.f < maxRotateDiff) {
+            const float angleCenter = max(acos(getCosAngle(toOther, other.center - center)), acos(getCosAngle(toThis, center - other.center)));
+            if (angleCenter < maxRotateDiff)
+                return true;
+            }
+        //const float cosAngle2 = getCosAngle()
         return false;
     }
 
-    float getCosAngle(const FinderPatternInfo& other) {
-        Point2f toOther = getDirectionTo(other.typePattern);
-        Point2f toThis = other.getDirectionTo(typePattern);
-        const float cosAngle = toOther.dot(toThis) / (sqrt(normL2Sqr<float>(toOther)) * sqrt(normL2Sqr<float>(toThis)));
+    static float getCosAngle(Point2f vec1, Point2f vec2) {
+        float cosAngle = vec1.dot(vec2) / (sqrt(normL2Sqr<float>(vec1)) * sqrt(normL2Sqr<float>(vec2)));
+        if (cosAngle < -1.f)
+            cosAngle = -1.f;
+        else if (cosAngle > 1.f)
+            cosAngle = 1.f;
         return cosAngle;
     }
+
+    /*float getCosAngle(const FinderPatternInfo& other) {
+        Point2f toOther = getDirectionTo(other.typePattern);
+        Point2f toThis = other.getDirectionTo(typePattern);
+        return getCosAngle(toOther, toThis);
+    }*/
 
     pair<int, Point2f> getQRCorner() const {
         if (typePattern == TypePattern::CENTER) {
@@ -4052,74 +4091,70 @@ struct QRCode {
         FinderPatternInfo pattern1 = _pattern1, pattern2 = _pattern2, pattern3 = _pattern3;
         Point2f centerQR;
         float distance = std::numeric_limits<float>::max();
-        const float maxRotateDiff = pattern1.maxRotateDiff;
-        if (abs(pattern1.minQrAngle - pattern2.minQrAngle) < maxRotateDiff && abs(pattern1.minQrAngle - pattern3.minQrAngle < maxRotateDiff)) { // check 15 degrees
-            const float maxRelativeModuleDiff = pattern1.maxRelativeModuleDiff;
-            if (max(pattern1.moduleSize, pattern2.moduleSize) / min(pattern1.moduleSize, pattern2.moduleSize) < maxRelativeModuleDiff &&
-                max(pattern1.moduleSize, pattern3.moduleSize) / min(pattern1.moduleSize, pattern3.moduleSize) < maxRelativeModuleDiff) {
 
-                // QR code:
-                // center       right
-                //    1 ________ 2
-                //     |_|    |_|
-                //     |     /  |
-                //     |    /   |
-                //     |   /    |
-                //     |_ /     |
-                //     |_|______|
-                //    4
-                //  bottom
+        if (pattern1.checkMaxRotateDiff(pattern2) == -1.f || pattern1.checkMaxRotateDiff(pattern3) == -1.f) // check 15 degrees
+            return QRCode(pattern1, pattern2, pattern3, centerQR, distance);
+        if (pattern1.checkRelativeSize(pattern2) == -1.f || pattern1.checkRelativeSize(pattern3) == -1.f)
+            return QRCode(pattern1, pattern2, pattern3, centerQR, distance);
+        // QR code:
+        // center       right
+        //    1 ________ 2
+        //     |_|    |_|
+        //     |     /  |
+        //     |    /   |
+        //     |   /    |
+        //     |_ /     |
+        //     |_|______|
+        //    4
+        //  bottom
 
-                // sides length check
-                const float side1 = sqrt(normL2Sqr<float>(pattern1.center - pattern2.center));
-                const float side2 = sqrt(normL2Sqr<float>(pattern1.center - pattern3.center));
-                const float side3 = sqrt(normL2Sqr<float>(pattern2.center - pattern3.center));
-                std::array<float, 3> sides = {side1, side2, side3};
-                sort(sides.begin(), sides.end());
-                if (sides[1] / sides[0] < maxRelativeModuleDiff) {
-                    // find center pattern
-                    if (side1 > side2 && side1 > side3) { // centerPattern is pattern3
-                        std::swap(pattern3, pattern1); // now pattern1 is centerPattern
-                    }
-                    else if (side2 > side1 && side2 > side3) { // centerPattern is pattern2
-                        swap(pattern2, pattern1); // now pattern1 is centerPattern
-                    }
-                    // now pattern1 is centerPattern
-                    centerQR = (pattern2.center + pattern3.center) / 2.f;
-                    pattern1.setType(FinderPatternInfo::TypePattern::CENTER, centerQR);
-
-                    // check triangle angle
-                    const float angle = acos((pattern1.center - pattern2.center).dot((pattern1.center - pattern3.center)) / (sides[0]*sides[1]));
-                    if (angle > CV_PI / 6.f && angle < (5.f * CV_PI / 6.f)) {
-                        // check that pattern2 is right
-                        pattern2.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
-                        bool ok = pattern1.checkAngle(pattern2);
-                        if (!ok) {
-                            // check that pattern3 is right
-                            pattern3.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
-                            ok = pattern1.checkAngle(pattern3);
-                            if (ok)
-                                std::swap(pattern3, pattern2); // now pattern2 is rightPattern
-                        }
-                        if (ok) {
-                            // check that pattern3 is bottom
-                            pattern3.setType(FinderPatternInfo::TypePattern::BOTTOM, centerQR);
-                            ok = pattern1.checkAngle(pattern3);
-                            if (ok) {
-                                // intersection check
-                                Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
-                                                               pattern2.getQRCorner().second, pattern2.points[pattern2.bestTotalId]);
-                                Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
-                                                               pattern3.getQRCorner().second, pattern3.points[pattern3.bestTotalId]);
-                                float moduleSize = (pattern1.moduleSize + pattern2.moduleSize + pattern3.moduleSize) / 3.f;
-                                if (sqrt(normL2Sqr<float>(c1 - c2)) < 7.f*moduleSize)
-                                    distance = (sides[0] + sides[1]) + sqrt(normL2Sqr<float>(c1 - c2));
-                            }
-                        }
-                    }
+        // sides length check
+        const float side1 = sqrt(normL2Sqr<float>(pattern1.center - pattern2.center));
+        const float side2 = sqrt(normL2Sqr<float>(pattern1.center - pattern3.center));
+        const float side3 = sqrt(normL2Sqr<float>(pattern2.center - pattern3.center));
+        std::array<float, 3> sides = {side1, side2, side3};
+        sort(sides.begin(), sides.end());
+        // check sides diff
+        if (sides[1] / sides[0] < pattern1.maxRelativeModuleDiff /*&& sides[2] / sides[0] < sqrt(2.f)*pattern1.maxRelativeModuleDiff*/) {
+            // find center pattern
+            if (side1 > side2 && side1 > side3) { // centerPattern is pattern3
+                std::swap(pattern3, pattern1); // now pattern1 is centerPattern
+            }
+            else if (side2 > side1 && side2 > side3) { // centerPattern is pattern2
+                swap(pattern2, pattern1); // now pattern1 is centerPattern
+            }
+            // now pattern1 is centerPattern
+            centerQR = (pattern2.center + pattern3.center) / 2.f;
+            pattern1.setType(FinderPatternInfo::TypePattern::CENTER, centerQR);
+            // check triangle angle
+            if (pattern1.checkTriangleAngle(pattern2, pattern3, sides[0]*sides[1]) == -1.f)
+                return QRCode(pattern1, pattern2, pattern3, centerQR, distance);
+            // check that pattern2 is right
+            pattern2.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
+            bool ok = pattern1.checkAngle(pattern2);
+            if (!ok) {
+                // check that pattern3 is right
+                pattern3.setType(FinderPatternInfo::TypePattern::RIGHT, centerQR);
+                ok = pattern1.checkAngle(pattern3);
+                if (ok)
+                    std::swap(pattern3, pattern2); // now pattern2 is rightPattern
+            }
+            if (ok) {
+                // check that pattern3 is bottom
+                pattern3.setType(FinderPatternInfo::TypePattern::BOTTOM, centerQR);
+                ok = pattern1.checkAngle(pattern3);
+                if (ok) {
+                    // intersection check
+                    Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
+                                                   pattern2.getQRCorner().second, pattern2.points[pattern2.bestTotalId]);
+                    Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
+                                                   pattern3.getQRCorner().second, pattern3.points[pattern3.bestTotalId]);
+                    float moduleSize = (pattern1.moduleSize + pattern2.moduleSize + pattern3.moduleSize) / 3.f;
+                    if (sqrt(normL2Sqr<float>(c1 - c2)) < 7.f*moduleSize)
+                        distance = (sides[0] + sides[1]) + sqrt(normL2Sqr<float>(c1 - c2));
                 }
             }
-        } 
+        }
         QRCode qrcode(pattern1, pattern2, pattern3, centerQR, distance);
         return qrcode;
     }
@@ -4166,6 +4201,7 @@ struct QRCode {
     FinderPatternInfo bottomPattern;
     Point2f center;
     float distance = std::numeric_limits<float>::max();
+    float score = 0.f;
 };
 
 vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
@@ -4196,6 +4232,9 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
         for (size_t i = 0ull; i < patterns.size(); i++) {
             for (size_t j = i + 1ull; j < patterns.size(); j++) {
                 for (size_t k = j + 1ull; k < patterns.size(); k++) {
+                    auto p1 = patterns[i];
+                    auto p2 = patterns[j];
+                    auto p3 = patterns[k];
                     QRCode tmp = QRCode::checkCompatibilityPattern(patterns[i], patterns[j], patterns[k]);
                     if (tmp.distance < qrCode.distance) { // != std::numeric_limits<float>::max()) { //
                         //bool bigQR = tmp.getMaxModuleSize() > 19.f ? true : false;
@@ -4229,6 +4268,7 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
             //}
             //imshow("1", copy);
             //waitKey(0);
+
             qrCodes.push_back(qrCode);
             std::sort(indexes, indexes+3);
   
@@ -4270,6 +4310,7 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     Dictionary dictionary = Dictionary(byteList, 5, 4);
     DetectorParameters parameters; //CORNER_REFINE_SUBPIX, CORNER_REFINE_CONTOUR, CORNER_REFINE_APRILTAG
     //parameters.cornerRefinementMethod = CornerRefineMethod::CORNER_REFINE_SUBPIX;
+    parameters.minMarkerPerimeterRate = 0.02;
     ArucoDetector arucoDetector(dictionary, parameters);
 
     vector<vector<Point2f> > corners;
