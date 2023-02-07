@@ -3948,12 +3948,6 @@ struct FinderPatternInfo {
         return cosAngle;
     }
 
-    /*float getCosAngle(const FinderPatternInfo& other) {
-        Point2f toOther = getDirectionTo(other.typePattern);
-        Point2f toThis = other.getDirectionTo(typePattern);
-        return getCosAngle(toOther, toThis);
-    }*/
-
     pair<int, Point2f> getQRCorner() const {
         if (typePattern == TypePattern::CENTER) {
             int id = (bestTotalId + 2) % 4;
@@ -4145,13 +4139,14 @@ struct QRCode {
                 ok = pattern1.checkAngle(pattern3);
                 if (ok) {
                     // intersection check
-                    Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
-                                                   pattern2.getQRCorner().second, pattern2.points[pattern2.bestTotalId]);
-                    Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
-                                                   pattern3.getQRCorner().second, pattern3.points[pattern3.bestTotalId]);
-                    float moduleSize = (pattern1.moduleSize + pattern2.moduleSize + pattern3.moduleSize) / 3.f;
-                    if (sqrt(normL2Sqr<float>(c1 - c2)) < 7.f*moduleSize)
-                        distance = (sides[0] + sides[1]) + sqrt(normL2Sqr<float>(c1 - c2));
+                    //Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
+                    //                               pattern2.getQRCorner().second, pattern2.points[pattern2.bestTotalId]);
+                    //Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
+                    //                               pattern3.getQRCorner().second, pattern3.points[pattern3.bestTotalId]);
+                    const float centerDistance = 0;//sqrt(normL2Sqr<float>(c1 - c2));
+                    //const float moduleSize = (pattern1.moduleSize + pattern2.moduleSize + pattern3.moduleSize) / 3.f;
+                    //if (centerDistance < 7.f*moduleSize)
+                    distance = sides[0] + sides[1] + centerDistance;
                 }
             }
         }
@@ -4207,10 +4202,6 @@ struct QRCode {
 vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
     vector<QRCode> qrCodes;
     vector<FinderPatternInfo> patterns;
-
-    //Mat reduceImg;
-    //const float scaleFactor = 4.f;
-    //resize(img, reduceImg, Size(img.cols / scaleFactor, img.rows / scaleFactor), INTER_NEAREST);
     
     for (size_t i = 0ull; i < corners.size(); i++) {
         patterns.push_back(FinderPatternInfo(corners[i]));
@@ -4350,89 +4341,6 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     return false;
 }
 
-    /*void analyzeFinderPatternSide(int curPointId, bool clockwise, Mat& img) {
-        // perpDirection has inward direction in finder pattern
-        const Point2f p1 = points[curPointId];
-        const int offset = clockwise ? 1 : 4-1;
-        const Point2f p2 = points[(curPointId + offset) % 4];
-        Point2f perpDirection = points[curPointId] - points[(4 + curPointId - offset) % 4];
-        perpendiculars[clockwise][curPointId] = perpDirection;
-        const Point2f halfModuleX = 0.5f*(p2-p1)/7.f;
-        const Point2f halfModuleY = 0.5f*perpDirection/7.f;
-        const Point2f checkDirectionStart(p1 + halfModuleX + halfModuleY);
-        const Point2f maxEnd(checkDirectionStart + 2.f*(7.f+6.f)*halfModuleY);
-        const Point2f checkDirectionEnd(checkDirectionStart + 2.f*7.f*halfModuleY);
-
-        Rect imageRect(Point(), img.size());
-        if (imageRect.contains(Point(cvRound(maxEnd.x), cvRound(maxEnd.y)))) {
-            LineIterator lineIterator(checkDirectionStart, checkDirectionEnd);
-            uint8_t prevValue = img.at<uint8_t>(lineIterator.pos());
-
-            vector<Point> vec = {lineIterator.pos()};
-
-            lineIterator++;
-            int colorCounter = 1;
-
-            for(int i = 1; i < lineIterator.count; i++, ++lineIterator) {
-                const uint8_t value = img.at<uint8_t>(lineIterator.pos());
-                if (prevValue != value) {
-                    const float dist = sqrt(normL2Sqr<float>((Point2f)(vec.back()-lineIterator.pos())));
-                    // check long and short lines
-                    const float maxRelativeModuleDif = 2.85f;
-                    if (max(moduleSize, dist)/min(moduleSize, dist) > maxRelativeModuleDif)
-                        break;
-                    vec.push_back(lineIterator.pos());
-                    prevValue = value;
-                    colorCounter++;
-                }
-            }
-            //std::cout << "colorCounter " << colorCounter << std::endl;
-            const int maxNumModules = 8; // the maximum number of modules is 8
-            const int minNumModules = 6; // set 6 out of 8 modules as valid result
-            if (colorCounter > minNumModules && colorCounter <= maxNumModules) { 
-                timingScores[clockwise][curPointId] = colorCounter;
-                // timingEnd[clockwise][curPointId] = checkDirectionEnd;
-                if (bestTotalScore < timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId]) {
-                    bestTotalId = curPointId;
-                    bestTotalScore = timingScores[clockwise][curPointId] + timingScores[!clockwise][curPointId];
-                }
-                if (bestScore < timingScores[clockwise][curPointId] || bestScore < timingScores[!clockwise][curPointId]) {
-                    // there may be false positives
-                    // add check next best pattern ???
-                    // TODO: could use line check to avoid fake timing pattern ???
-
-                    bestId[0] = clockwise;
-                    bestId[1] = curPointId;
-                    bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
-                    // try to use rectangle check:
-                    //int size = cvRound(moduleSize*7.f);
-                    //Rect2i checkRectangle(cvRound(checkDirectionEnd.x - size), cvRound(checkDirectionEnd.y - size), 2*size, 2*size);
-                    //if (imageRect.contains(checkRectangle.br()) && imageRect.contains(checkRectangle.tl())) {
-                    //    Mat tmp(img, checkRectangle);
-                    //    const int nonZero = countNonZero(tmp);
-                    //    const int zero = (int)tmp.total() - nonZero;
-                    //    const float relDiff = (float)abs(zero - nonZero) / (float)tmp.total();
-                    //    if (relDiff < 0.19f) {
-                    //        bestId[0] = clockwise;
-                    //        bestId[1] = curPointId;
-                    //        bestScore = max(timingScores[clockwise][curPointId], timingScores[!clockwise][curPointId]);
-                    //    }
-                    //}
-                }
-            }
-            else if (colorCounter > 8) { 
-                colorCounter = 0;
-                CV_LOG_WARNING(NULL, "analyzeFinderPatternSide found too many modules, try to change parameters in"
-                                     "adaptiveThreshold" << colorCounter);
-            }
-            //circle(img, checkDirectionStart, 3, Scalar(127, 127, 127), FILLED, LINE_8);
-            //circle(img, checkDirectionEnd, 3, Scalar(127, 127, 127), FILLED, LINE_8);
-            //if (vec.size() >= 9ull) {
-            //    for (int i = 0; i < vec.size(); i++)
-            //        circle(img, vec[i], 2, Scalar(127, 127, 127), FILLED, LINE_8);
-            //}
-        }
-    }*/
 
 class ParallelDecodeProcess : public ParallelLoopBody
 {
