@@ -4205,7 +4205,7 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
     
     for (size_t i = 0ull; i < corners.size(); i++) {
         patterns.push_back(FinderPatternInfo(corners[i]));
-        //circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
+        circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
     }
     //Mat copy = img.clone();
     //float scale = (float)copy1.rows / 1200.f;
@@ -4312,13 +4312,21 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     if (corners.size() >= 3ull) {
         Mat binImage;
         adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
-        //Mat copy1 = binImage.clone();
-        //float scale = (float)copy1.rows / 1200.f;
-        //if (scale > 1.f) {
-        //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
-        //}
-        //imshow("binImage", copy1);
-        //waitKey(0);
+        Mat copy1 = binImage.clone(), copy2 = gray.clone();
+        for (int i = 0; i < corners.size(); i++) {
+            for (int j = 0; j < 4; j++) {
+                circle(copy1, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
+                circle(copy2, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
+            }
+        }
+        float scale = (float)copy1.rows / 1200.f;
+        if (scale > 1.f) {
+            resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+            resize(copy2, copy2, Size(copy2.cols / scale, copy2.rows / scale));
+        }
+        imshow("binImage", copy1);
+        imshow("gray", copy2);
+        waitKey(0);
         vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
         if (qrCodes.size() == 0ull)
             return false;

@@ -793,10 +793,13 @@ TEST(Objdetect_QRCode_detectMulti, test_aruco)
     //const std::string name_current_image = "image019.jpg";
     //const std::string name_current_image = "image001.jpg";
     //const std::string name_current_image = "image002.jpg";
-    const std::string name_current_image = "image007.jpg";
+    //const std::string name_current_image = "image007.jpg";
     //const std::string name_current_image = "lots_2_2.jpg";
-    const std::string root = "qrcode/";
-    //const std::string root = "qrcode/multiple/";
+    //const std::string name_current_image = "5_qrcodes.png";
+    const std::string name_current_image = "6_qrcodes.png";
+    //const std::string name_current_image = "8_close_qrcodes.png";
+    //const std::string root = "qrcode/";
+    const std::string root = "qrcode/multiple/";
 
     std::string image_path = findDataFile(root + name_current_image);
     Mat src = imread(image_path);
