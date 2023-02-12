@@ -4139,14 +4139,14 @@ struct QRCode {
                 ok = pattern1.checkAngle(pattern3);
                 if (ok) {
                     // intersection check
-                    //Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
-                    //                               pattern2.getQRCorner().second, pattern2.points[pattern2.bestTotalId]);
-                    //Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
-                    //                               pattern3.getQRCorner().second, pattern3.points[pattern3.bestTotalId]);
-                    const float centerDistance = 0;//sqrt(normL2Sqr<float>(c1 - c2));
+                    Point2f c1 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
+                                                   pattern2.getQRCorner().second, pattern2.points[pattern2.bestTotalId]);
+                    Point2f c2 = intersectionLines(pattern1.getQRCorner().second, pattern1.points[pattern1.bestTotalId],
+                                                   pattern3.getQRCorner().second, pattern3.points[pattern3.bestTotalId]);
+                    const float centerDistance = sqrt(normL2Sqr<float>(c1 - c2));
                     //const float moduleSize = (pattern1.moduleSize + pattern2.moduleSize + pattern3.moduleSize) / 3.f;
                     //if (centerDistance < 7.f*moduleSize)
-                    distance = sides[0] + sides[1] + centerDistance;
+                    distance = (sides[0] + sides[1] + centerDistance)*(sides[1] / sides[0]);//*(sides[1] / sides[0]);
                 }
             }
         }
@@ -4205,7 +4205,7 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
     
     for (size_t i = 0ull; i < corners.size(); i++) {
         patterns.push_back(FinderPatternInfo(corners[i]));
-        circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
+        //circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
     }
     //Mat copy = img.clone();
     //float scale = (float)copy1.rows / 1200.f;
@@ -4250,9 +4250,9 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
         }
             if (flag) {
             //Mat copy = img.clone();
-            //circle(copy, qrCode.centerPattern.center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
-            //circle(copy, qrCode.rightPattern.center, 30, Scalar(64, 64, 64), FILLED, LINE_8);
-            //circle(copy, qrCode.bottomPattern.center, 30, Scalar(191, 191, 191), FILLED, LINE_8);
+            //circle(copy, qrCode.centerPattern.center, 50/3, Scalar(128, 128, 128), FILLED, LINE_8);
+            //circle(copy, qrCode.rightPattern.center, 30/3, Scalar(64, 64, 64), FILLED, LINE_8);
+            //circle(copy, qrCode.bottomPattern.center, 30/3, Scalar(191, 191, 191), FILLED, LINE_8);
             //float scale = (float)copy.rows / 1200.f;
             //if (scale > 1.f) {
             //    resize(copy, copy, Size(copy.cols / scale, copy.rows / scale));
@@ -4310,24 +4310,24 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
     arucoDetector.detectMarkers(gray, corners, ids, rejectedCorners);
 
     if (corners.size() >= 3ull) {
-        Mat binImage;
-        adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
-        Mat copy1 = binImage.clone(), copy2 = gray.clone();
-        for (int i = 0; i < corners.size(); i++) {
-            for (int j = 0; j < 4; j++) {
-                circle(copy1, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
-                circle(copy2, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
-            }
-        }
-        float scale = (float)copy1.rows / 1200.f;
-        if (scale > 1.f) {
-            resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
-            resize(copy2, copy2, Size(copy2.cols / scale, copy2.rows / scale));
-        }
-        imshow("binImage", copy1);
-        imshow("gray", copy2);
-        waitKey(0);
-        vector<QRCode> qrCodes = analyzeFinderPatterns(corners, binImage);
+        //Mat binImage;
+        //adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
+        //Mat copy1 = binImage.clone(), copy2 = gray.clone();
+        //for (int i = 0; i < corners.size(); i++) {
+        //    for (int j = 0; j < 4; j++) {
+        //        circle(copy1, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
+        //        circle(copy2, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
+        //    }
+        //}
+        //float scale = (float)copy1.rows / 1200.f;
+        //if (scale > 1.f) {
+        //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+        //    resize(copy2, copy2, Size(copy2.cols / scale, copy2.rows / scale));
+        //}
+        //imshow("binImage", copy1);
+        //imshow("gray", copy2);
+        //waitKey(0);
+        vector<QRCode> qrCodes = analyzeFinderPatterns(corners, gray);
         if (qrCodes.size() == 0ull)
             return false;
         vector<Point2f> result;
