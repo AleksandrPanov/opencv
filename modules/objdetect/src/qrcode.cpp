@@ -4199,6 +4199,12 @@ struct QRCode {
     float score = 0.f;
 };
 
+// step0: preprocessing ???
+// step1: detect finder patterns
+// step2: grouping patterns into compatible groups
+// step3: search QR codes in groups
+
+
 vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
     vector<QRCode> qrCodes;
     vector<FinderPatternInfo> patterns;
@@ -4331,14 +4337,11 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
         if (qrCodes.size() == 0ull)
             return false;
         vector<Point2f> result;
-        if (qrCodes.size() > 0ull) {
-            for (auto& qr : qrCodes) {
-                for (Point2f& corner : qr.getQRCorners()) {
-                    result.push_back(corner);
-                }
-                //std::cout << qr.getQRCorners() << std::endl << std::endl;
+        for (auto& qr : qrCodes) {
+            for (Point2f& corner : qr.getQRCorners()) {
+                result.push_back(corner);
             }
-            
+            //std::cout << qr.getQRCorners() << std::endl << std::endl;
         }
         updatePointsResult(points, result);
         //imshow("binImage", binImage);
