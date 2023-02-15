@@ -4107,7 +4107,7 @@ struct QRCode {
         const float side2 = sqrt(normL2Sqr<float>(pattern1.center - pattern3.center));
         const float side3 = sqrt(normL2Sqr<float>(pattern2.center - pattern3.center));
         std::array<float, 3> sides = {side1, side2, side3};
-        sort(sides.begin(), sides.end());
+        std::sort(sides.begin(), sides.end());
         // check sides diff
         if (sides[1] / sides[0] < pattern1.maxRelativeModuleDiff /*&& sides[2] / sides[0] < sqrt(2.f)*pattern1.maxRelativeModuleDiff*/) {
             // find center pattern
