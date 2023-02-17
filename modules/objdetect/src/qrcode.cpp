@@ -955,16 +955,35 @@ vector<Point2f> QRDetect::getQuadrilateral(vector<Point2f> angle_list)
 struct QRCodeDetector::Impl
 {
 public:
-    Impl() { epsX = 0.2; epsY = 0.1; }
+    Impl(QRDetectorParameters _qrDetectorParameters): qrDetectorParameters(_qrDetectorParameters)  {
+            epsX = 0.2;
+            epsY = 0.1;
+            if (qrDetectorParameters.qrDetectMethod == QRDetectMethod::ARUCO) {
+                    using namespace aruco;
+                    Mat bits = Mat::ones(Size(5, 5), CV_8UC1);
+                    for (int i = 0; i < 3; i++)
+                        for (int j = 0; j < 3; j++)
+                            bits.at<uint8_t>(i+1, j+1) = 0;
+                    Mat byteList = Dictionary::getByteListFromBits(bits);
+                    Dictionary dictionary = Dictionary(byteList, 5, 4);
+                    DetectorParameters parameters; //CORNER_REFINE_SUBPIX, CORNER_REFINE_CONTOUR, CORNER_REFINE_APRILTAG
+                    //parameters.cornerRefinementMethod = CornerRefineMethod::CORNER_REFINE_SUBPIX;
+                    parameters.minMarkerPerimeterRate = 0.02;
+                    arucoDetector = ArucoDetector(dictionary, parameters);
+            }
+        }
     ~Impl() {}
 
     double epsX, epsY;
     vector<vector<Point2f>> alignmentMarkers;
     vector<Point2f> updateQrCorners;
     bool useAlignmentMarkers = true;
+
+    QRDetectorParameters qrDetectorParameters;
+    aruco::ArucoDetector arucoDetector;
 };
 
-QRCodeDetector::QRCodeDetector() : p(new Impl) {}
+QRCodeDetector::QRCodeDetector(QRDetectorParameters qrDetectorParameters) : p(new Impl(qrDetectorParameters)) {}
 
 QRCodeDetector::~QRCodeDetector() {}
 
@@ -3812,33 +3831,6 @@ bool QRDetectMulti::computeTransformationPoints(const size_t cur_ind)
     return true;
 }
 
-/*bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
-{
-    Mat inarr;
-    if (!checkQRInputImage(in, inarr))
-    {
-        points.release();
-        return false;
-    }
-
-    QRDetectMulti qrdet;
-    qrdet.init(inarr, p->epsX, p->epsY);
-    if (!qrdet.localization())
-    {
-        points.release();
-        return false;
-    }
-    vector< vector< Point2f > > pnts2f = qrdet.getTransformationPoints();
-    vector<Point2f> trans_points;
-    for(size_t i = 0; i < pnts2f.size(); i++)
-        for(size_t j = 0; j < pnts2f[i].size(); j++)
-            trans_points.push_back(pnts2f[i][j]);
-
-    updatePointsResult(points, trans_points);
-
-    return true;
-}*/
-
 struct QRCode;
 
 struct FinderPatternInfo {
@@ -4199,27 +4191,24 @@ struct QRCode {
     float score = 0.f;
 };
 
-// step0: preprocessing ???
-// step1: detect finder patterns
-// step2: grouping patterns into compatible groups
-// step3: search QR codes in groups
-
 
 vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Mat& img) {
     vector<QRCode> qrCodes;
     vector<FinderPatternInfo> patterns;
+    if (img.empty())
+        return qrCodes;
     
     for (size_t i = 0ull; i < corners.size(); i++) {
         patterns.push_back(FinderPatternInfo(corners[i]));
         //circle(copy1, patterns.back().center, 50, Scalar(128, 128, 128), FILLED, LINE_8);
     }
-    //Mat copy = img.clone();
-    //float scale = (float)copy1.rows / 1200.f;
-    //if (scale > 1.f) {
-    //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
-    //}
-    //imshow("1", copy1);
-    //waitKey(0);
+    /*Mat copy = img.clone();
+    float scale = (float)copy1.rows / 1200.f;
+    if (scale > 1.f) {
+        resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+    }
+    imshow("1", copy1);
+    waitKey(0);*/
 
     bool flag = true;
     int indexes[3] = {0};
@@ -4233,23 +4222,12 @@ vector<QRCode> analyzeFinderPatterns(const vector<vector<Point2f> > &corners, Ma
                     auto p2 = patterns[j];
                     auto p3 = patterns[k];
                     QRCode tmp = QRCode::checkCompatibilityPattern(patterns[i], patterns[j], patterns[k]);
-                    if (tmp.distance < qrCode.distance) { // != std::numeric_limits<float>::max()) { //
-                        //bool bigQR = tmp.getMaxModuleSize() > 19.f ? true : false;
-                        //Mat& refImg = bigQR ? reduceImg : img;
-                        //if (bigQR){
-                        //    std::cout << "bigQR" << std::endl;
-                        //    tmp = tmp * (1.f/scaleFactor);
-                        //}
-                        //int res = tmp.calculateModulesByTimingPattern(refImg);
-                        //if (res) {
-                        //    if (bigQR)
-                        //        tmp = tmp*scaleFactor;
-                            qrCode = tmp;
-                            flag = true;
-                            indexes[0] = (int)i;
-                            indexes[1] = (int)j;
-                            indexes[2] = (int)k;
-                        //} 
+                    if (tmp.distance < qrCode.distance) {
+                        qrCode = tmp;
+                        flag = true;
+                        indexes[0] = (int)i;
+                        indexes[1] = (int)j;
+                        indexes[2] = (int)k;
                     }
                 }
             }
@@ -4294,59 +4272,55 @@ bool QRCodeDetector::detectMulti(InputArray in, OutputArray points) const
         points.release();
         return false;
     }
-
-    QRDetectMulti qrdet;
-    //qrdet.init(inarr, p->epsX, p->epsY);
-
-    using namespace aruco;
-    Mat bits = Mat::ones(Size(5, 5), CV_8UC1);
-    for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
-            bits.at<uint8_t>(i+1, j+1) = 0;
-    Mat byteList = Dictionary::getByteListFromBits(bits);
-    Dictionary dictionary = Dictionary(byteList, 5, 4);
-    DetectorParameters parameters; //CORNER_REFINE_SUBPIX, CORNER_REFINE_CONTOUR, CORNER_REFINE_APRILTAG
-    //parameters.cornerRefinementMethod = CornerRefineMethod::CORNER_REFINE_SUBPIX;
-    parameters.minMarkerPerimeterRate = 0.02;
-    ArucoDetector arucoDetector(dictionary, parameters);
-
-    vector<vector<Point2f> > corners;
-    vector<vector<Point2f> > rejectedCorners;
-    vector<int> ids;
-    arucoDetector.detectMarkers(gray, corners, ids, rejectedCorners);
-
-    if (corners.size() >= 3ull) {
-        //Mat binImage;
-        //adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
-        //Mat copy1 = binImage.clone(), copy2 = gray.clone();
-        //for (int i = 0; i < corners.size(); i++) {
-        //    for (int j = 0; j < 4; j++) {
-        //        circle(copy1, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
-        //        circle(copy2, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
-        //    }
-        //}
-        //float scale = (float)copy1.rows / 1200.f;
-        //if (scale > 1.f) {
-        //    resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
-        //    resize(copy2, copy2, Size(copy2.cols / scale, copy2.rows / scale));
-        //}
-        //imshow("binImage", copy1);
-        //imshow("gray", copy2);
-        //waitKey(0);
-        vector<QRCode> qrCodes = analyzeFinderPatterns(corners, gray);
-        if (qrCodes.size() == 0ull)
-            return false;
-        vector<Point2f> result;
-        for (auto& qr : qrCodes) {
-            for (Point2f& corner : qr.getQRCorners()) {
-                result.push_back(corner);
+    vector<Point2f> result;
+    if (p->qrDetectorParameters.qrDetectMethod == QRDetectMethod::ARUCO) {
+        vector<vector<Point2f> > corners;
+        vector<vector<Point2f> > rejectedCorners;
+        vector<int> ids;
+        p->arucoDetector.detectMarkers(gray, corners, ids, rejectedCorners);
+        if (corners.size() >= 3ull) {
+            /*Mat binImage;
+            adaptiveThreshold(gray, binImage, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
+            Mat copy1 = binImage.clone(), copy2 = gray.clone();
+            for (int i = 0; i < corners.size(); i++) {
+                for (int j = 0; j < 4; j++) {
+                    circle(copy1, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
+                    circle(copy2, corners[i][j], 10, Scalar(128, 128, 128), FILLED, LINE_8);
+                }
             }
-            //std::cout << qr.getQRCorners() << std::endl << std::endl;
+            float scale = (float)copy1.rows / 1200.f;
+            if (scale > 1.f) {
+                resize(copy1, copy1, Size(copy1.cols / scale, copy1.rows / scale));
+                resize(copy2, copy2, Size(copy2.cols / scale, copy2.rows / scale));
+            }
+            imshow("binImage", copy1);
+            imshow("gray", copy2);
+            waitKey(0);*/
+            vector<QRCode> qrCodes = analyzeFinderPatterns(corners, gray);
+            if (qrCodes.size() == 0ull)
+                return false;
+            for (auto& qr : qrCodes) {
+                for (Point2f& corner : qr.getQRCorners()) {
+                    result.push_back(corner);
+                }
+            }
         }
+    }
+    else {
+        QRDetectMulti qrdet;
+        qrdet.init(gray, p->epsX, p->epsY);
+        if (!qrdet.localization()) {
+            points.release();
+            return false;
+        }
+        vector< vector< Point2f > > pnts2f = qrdet.getTransformationPoints();
+        vector<Point2f> trans_points;
+        for(size_t i = 0; i < pnts2f.size(); i++)
+            for(size_t j = 0; j < pnts2f[i].size(); j++)
+                trans_points.push_back(pnts2f[i][j]);
+    }
+    if (result.size() >= 4) {
         updatePointsResult(points, result);
-        //imshow("binImage", binImage);
-        //waitKey(0);
-        //imwrite("binImage.png", binImage);
         return true;
     }
     return false;

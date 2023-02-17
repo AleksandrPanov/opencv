@@ -763,10 +763,22 @@ public:
 
 };
 
+enum QRDetectMethod{
+    SEARCH_LINES, // old method
+    ARUCO // new method
+    // could add WECHAT method
+};
+struct CV_EXPORTS_W_SIMPLE QRDetectorParameters {
+    QRDetectorParameters() {}
+
+    CV_PROP_RW QRDetectMethod qrDetectMethod = QRDetectMethod::ARUCO;
+    // parameters
+};
+
 class CV_EXPORTS_W QRCodeDetector
 {
 public:
-    CV_WRAP QRCodeDetector();
+    CV_WRAP QRCodeDetector(QRDetectorParameters qrDetectorParameters = QRDetectorParameters());
     ~QRCodeDetector();
 
     /** @brief sets the epsilon used during the horizontal scan of QR code stop marker detection.
