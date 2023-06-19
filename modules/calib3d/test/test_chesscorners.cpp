@@ -750,5 +750,16 @@ TEST(Calib3d_AsymmetricCirclesPatternDetector, regression_19498)
     EXPECT_FALSE(res);
 }
 
+TEST(Calib3d_FindChessboardCorners, issue_23558)
+{
+    const std::string name_current_image = "issue_23558.png";
+    const std::string root = "cv/cameracalibration/";
+
+    std::string image_path = findDataFile(root + name_current_image);
+    Mat src = imread(image_path);
+    vector<Point2f> cornres;
+    findChessboardCorners(src, Size(26, 16), cornres, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FAST_CHECK | CALIB_CB_NORMALIZE_IMAGE);
+}
+
 }} // namespace
 /* End of file. */
