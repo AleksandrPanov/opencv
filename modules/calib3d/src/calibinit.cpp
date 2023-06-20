@@ -77,7 +77,7 @@
 //#define ENABLE_TRIM_COL_ROW
 
 // Requires CMake flag: DEBUG_opencv_calib3d=ON
-//#define DEBUG_CHESSBOARD
+#define DEBUG_CHESSBOARD 1
 #define DEBUG_CHESSBOARD_TIMEOUT 0  // 0 - wait for 'q'
 
 #include <opencv2/core/utils/logger.defines.hpp>
@@ -174,6 +174,7 @@ struct ChessBoardQuad
 #ifdef DEBUG_CHESSBOARD
 static void SHOW(const std::string & name, Mat & img)
 {
+    imwrite("1.png", img);
     imshow(name, img);
 #if DEBUG_CHESSBOARD_TIMEOUT
     waitKey(DEBUG_CHESSBOARD_TIMEOUT);
@@ -194,6 +195,7 @@ static void SHOW_QUADS(const std::string & name, const Mat & img_, ChessBoardQua
             line(img, quad.corners[j]->pt, quad.corners[(j + 1) & 3]->pt, Scalar(0, 240, 0), 1, LINE_AA);
         }
     }
+    imwrite("2.png", img);
     imshow(name, img);
 #if DEBUG_CHESSBOARD_TIMEOUT
     waitKey(DEBUG_CHESSBOARD_TIMEOUT);
