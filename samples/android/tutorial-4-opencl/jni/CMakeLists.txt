@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.6)
 set(target JNIpart)
 project(${target} CXX)
 
-# create folder ANDROID_OPENCL_SDK in opencv build folder
-set(ANDROID_OPENCL_SDK "${CMAKE_BINARY_DIR}/../../../../../../OPENCL_SDK")
 
 if (OPENCV_FROM_SDK)
   message(STATUS "Using OpenCV from local SDK")
@@ -28,19 +26,19 @@ target_link_libraries(${target} ${ANDROID_OPENCV_COMPONENTS} -lGLESv2 -lEGL -llo
 
 if(OpenCL_FOUND)
   include_directories(${OpenCL_INCLUDE_DIRS})
+  set_target_properties(${target} PROPERTIES LINK_FLAGS "-Wl,--allow-shlib-undefined")
   target_link_libraries(${target} ${OpenCL_LIBRARIES})
 
   add_definitions("-DOPENCL_FOUND")
   add_definitions("-DCL_HPP_MINIMUM_OPENCL_VERSION=120")
   add_definitions("-DCL_HPP_TARGET_OPENCL_VERSION=120")
   add_definitions("-DCL_HPP_ENABLE_PROGRAM_CONSTRUCTION_FROM_ARRAY_COMPATIBILITY")
-elseif(DEFINED ANDROID_OPENCL_SDK)
+elseif(NOT ("${ANDROID_OPENCL_SDK}" STREQUAL ""))
   include_directories(${ANDROID_OPENCL_SDK}/include)
   link_directories(${ANDROID_OPENCL_SDK}/lib)
   target_link_directories(${target} PRIVATE ${ANDROID_OPENCL_SDK}/lib)
 
-  set_target_properties(
-          ${target} PROPERTIES LINK_FLAGS "-Wl,--allow-shlib-undefined")
+  set_target_properties(${target} PROPERTIES LINK_FLAGS "-Wl,--allow-shlib-undefined")
   target_link_libraries(${target} -lOpenCL)
 
   add_definitions("-DOPENCL_FOUND")
