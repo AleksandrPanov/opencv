@@ -326,4 +326,23 @@ TEST(CV_ArucoDictionary, extendDictionary) {
     ASSERT_EQ(cv::norm(custom_dictionary.bytesList, base_dictionary.bytesList.rowRange(0, 150)), 0.);
 }
 
+TEST(Aruco, detectMarkers) {
+    setNumThreads(1);
+    Mat bits = Mat::ones(Size(5, 5), CV_8UC1);
+    Mat(bits, Rect(1, 1, 3, 3)).setTo(Scalar(0));
+    Mat byteList = aruco::Dictionary::getByteListFromBits(bits);
+    aruco::Dictionary dictionary = aruco::Dictionary(byteList, 5, 4);
+    aruco::DetectorParameters arucoParams;
+    arucoParams.minMarkerPerimeterRate = 0.02;
+    aruco::ArucoDetector arucoDetector = aruco::ArucoDetector(dictionary, arucoParams);
+
+    //Mat image = imread("C:/Users/Alex/PycharmProjects/qrBench/qrcodes/detection/lots/image001.jpg");
+    Mat image = imread("C:/Users/Alex/PycharmProjects/qrBench/qrcodes/detection/monitor/image001.jpg");
+    vector<vector<Point2f>> corners;
+    vector<int> ids;
+    for (int i = 0; i < 10; i++)
+        arucoDetector.detectMarkers(image, corners, ids);
+    std::cout << corners.size();
+}
+
 }} // namespace

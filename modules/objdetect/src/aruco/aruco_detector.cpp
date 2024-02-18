@@ -115,7 +115,6 @@ bool RefineParameters::writeRefineParameters(FileStorage& fs, const String& name
   * @brief Threshold input image using adaptive thresholding
   */
 static void _threshold(InputArray _in, OutputArray _out, int winSize, double constant) {
-
     CV_Assert(winSize >= 3);
     if(winSize % 2 == 0) winSize++; // win size must be odd
     adaptiveThreshold(_in, _out, 255, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY_INV, winSize, constant);
@@ -130,7 +129,6 @@ static void _findMarkerContours(const Mat &in, vector<vector<Point2f> > &candida
                                 vector<vector<Point> > &contoursOut, double minPerimeterRate,
                                 double maxPerimeterRate, double accuracyRate,
                                 double minCornerDistanceRate, int minDistanceToBorder, int minSize) {
-
     CV_Assert(minPerimeterRate > 0 && maxPerimeterRate > 0 && accuracyRate > 0 &&
               minCornerDistanceRate >= 0 && minDistanceToBorder >= 0);
 
@@ -145,10 +143,8 @@ static void _findMarkerContours(const Mat &in, vector<vector<Point2f> > &candida
         minPerimeterPixels = 4*minSize;
     }
 
-    Mat contoursImg;
-    in.copyTo(contoursImg);
     vector<vector<Point> > contours;
-    findContours(contoursImg, contours, RETR_LIST, CHAIN_APPROX_NONE);
+    findContours(in, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
     // now filter list of contours
     for(unsigned int i = 0; i < contours.size(); i++) {
         // check perimeter
@@ -162,7 +158,7 @@ static void _findMarkerContours(const Mat &in, vector<vector<Point2f> > &candida
 
         // check min distance between corners
         double minDistSq =
-            max(contoursImg.cols, contoursImg.rows) * max(contoursImg.cols, contoursImg.rows);
+            max(in.cols, in.rows) * max(in.cols, in.rows);
         for(int j = 0; j < 4; j++) {
             double d = (double)(approxCurve[j].x - approxCurve[(j + 1) % 4].x) *
                            (double)(approxCurve[j].x - approxCurve[(j + 1) % 4].x) +
@@ -177,8 +173,8 @@ static void _findMarkerContours(const Mat &in, vector<vector<Point2f> > &candida
         bool tooNearBorder = false;
         for(int j = 0; j < 4; j++) {
             if(approxCurve[j].x < minDistanceToBorder || approxCurve[j].y < minDistanceToBorder ||
-               approxCurve[j].x > contoursImg.cols - 1 - minDistanceToBorder ||
-               approxCurve[j].y > contoursImg.rows - 1 - minDistanceToBorder)
+               approxCurve[j].x > in.cols - 1 - minDistanceToBorder ||
+               approxCurve[j].y > in.rows - 1 - minDistanceToBorder)
                 tooNearBorder = true;
         }
         if(tooNearBorder) continue;
@@ -280,7 +276,6 @@ float static inline getAverageDistance(const std::vector<Point2f>& marker1, cons
 static void _detectInitialCandidates(const Mat &grey, vector<vector<Point2f> > &candidates,
                                      vector<vector<Point> > &contours,
                                      const DetectorParameters &params) {
-
     CV_Assert(params.adaptiveThreshWinSizeMin >= 3 && params.adaptiveThreshWinSizeMax >= 3);
     CV_Assert(params.adaptiveThreshWinSizeMax >= params.adaptiveThreshWinSizeMin);
     CV_Assert(params.adaptiveThreshWinSizeStep > 0);
@@ -425,6 +420,7 @@ static uint8_t _identifyOneCandidate(const Dictionary& dictionary, const Mat& _i
                                      const vector<Point2f>& _corners, int& idx,
                                      const DetectorParameters& params, int& rotation,
                                      const float scale = 1.f) {
+    CV_TRACE_FUNCTION();
     CV_DbgAssert(params.markerBorderBits > 0);
     uint8_t typ=1;
     // get bits
@@ -675,6 +671,7 @@ struct ArucoDetector::ArucoDetectorImpl {
      */
     vector<MarkerCandidateTree>
     filterTooCloseCandidates(vector<vector<Point2f> > &candidates, vector<vector<Point> > &contours) {
+        CV_TRACE_FUNCTION();
         CV_Assert(detectorParams.minMarkerDistanceRate >= 0.);
         vector<MarkerCandidateTree> candidateTree(candidates.size());
         for(size_t i = 0ull; i < candidates.size(); i++) {
