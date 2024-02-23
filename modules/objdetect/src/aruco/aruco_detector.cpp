@@ -195,18 +195,15 @@ static void _findMarkerContours(const Mat &in, vector<vector<Point2f> > &candida
 /**
   * @brief Assure order of candidate corners is clockwise direction
   */
-static void _reorderCandidatesCorners(vector<vector<Point2f> > &candidates) {
+static void _reorderCandidatesCorners(vector<Point2f>& candidates) {														 
+    double dx1 = candidates[1].x - candidates[0].x;
+    double dy1 = candidates[1].y - candidates[0].y;
+    double dx2 = candidates[2].x - candidates[0].x;
+    double dy2 = candidates[2].y - candidates[0].y;
+    double crossProduct = (dx1 * dy2) - (dy1 * dx2);
 
-    for(unsigned int i = 0; i < candidates.size(); i++) {
-        double dx1 = candidates[i][1].x - candidates[i][0].x;
-        double dy1 = candidates[i][1].y - candidates[i][0].y;
-        double dx2 = candidates[i][2].x - candidates[i][0].x;
-        double dy2 = candidates[i][2].y - candidates[i][0].y;
-        double crossProduct = (dx1 * dy2) - (dy1 * dx2);
-
-        if(crossProduct < 0.0) { // not clockwise direction
-            swap(candidates[i][1], candidates[i][3]);
-        }
+    if (crossProduct < 0.0) { // not clockwise direction
+        swap(candidates[1], candidates[3]);
     }
 }
 
@@ -229,6 +226,7 @@ struct MarkerCandidate {
     vector<Point2f> corners;
     vector<Point> contour;
     float perimeter = 0.f;
+    int level = 0;
 };
 
 struct MarkerCandidateTree : MarkerCandidate{
@@ -274,14 +272,12 @@ float static inline getAverageDistance(const std::vector<Point2f>& marker1, cons
 /**
  * @brief Initial steps on finding square candidates
  */
-static void _detectInitialCandidates(const Mat &grey, vector<vector<Point2f> > &candidates,
-                                     vector<vector<Point> > &contours,
-                                     const DetectorParameters &params) {
+static void _detectInitialCandidates(const Mat& grey, vector<MarkerCandidateTree>& markerTree,
+                                     const DetectorParameters& params, int depth) {	
 
     CV_Assert(params.adaptiveThreshWinSizeMin >= 3 && params.adaptiveThreshWinSizeMax >= 3);
     CV_Assert(params.adaptiveThreshWinSizeMax >= params.adaptiveThreshWinSizeMin);
     CV_Assert(params.adaptiveThreshWinSizeStep > 0);
-
     // number of window sizes (scales) to apply adaptive thresholding
     int nScales =  (params.adaptiveThreshWinSizeMax - params.adaptiveThreshWinSizeMin) /
                       params.adaptiveThreshWinSizeStep + 1;
@@ -310,10 +306,23 @@ static void _detectInitialCandidates(const Mat &grey, vector<vector<Point2f> > &
     // join candidates
     for(int i = 0; i < nScales; i++) {
         for(unsigned int j = 0; j < candidatesArrays[i].size(); j++) {
-            candidates.push_back(candidatesArrays[i][j]);
-            contours.push_back(contoursArrays[i][j]);
+            vector<Point2f> a(candidatesArrays[i][j].size());
+            vector<Point> b(contoursArrays[i][j].size());
+            for (int l = 0; l < a.size(); l++) {
+                a[l].x = candidatesArrays[i][j][l].x * (1 << depth);
+                a[l].y = candidatesArrays[i][j][l].y * (1 << depth);
+                b[l].x = contoursArrays[i][j][l].x;
+                b[l].y = contoursArrays[i][j][l].y;
+            }
+            MarkerCandidateTree newMarkerTree;
+            newMarkerTree.corners = a;
+            newMarkerTree.contour = b;
+            newMarkerTree.level = depth;
+            markerTree.push_back(newMarkerTree);
         }
     }
+    // candidatesArrays = vector<vector<vector<Point2f>>>(nScales);
+    // contoursArrays = vector<vector<vector<Point>>>(nScales);
 }
 
 
@@ -657,11 +666,13 @@ struct ArucoDetector::ArucoDetectorImpl {
     /**
      * @brief Detect square candidates in the input image
      */
-    void detectCandidates(const Mat& grey, vector<vector<Point2f> >& candidates, vector<vector<Point> >& contours) {
+    void detectCandidates(const Mat& grey, vector<MarkerCandidateTree>& markerTree, int depth) {
         /// 1. DETECT FIRST SET OF CANDIDATES
-        _detectInitialCandidates(grey, candidates, contours, detectorParams);
+        _detectInitialCandidates(grey, markerTree, detectorParams, depth);
         /// 2. SORT CORNERS
-        _reorderCandidatesCorners(candidates);
+        for (int i = 0; i < markerTree.size(); i++) {
+            _reorderCandidatesCorners(markerTree[i].corners);
+        }
     }
 
     /**
@@ -671,14 +682,22 @@ struct ArucoDetector::ArucoDetectorImpl {
      * clear candidates and contours
      */
     vector<MarkerCandidateTree>
-    filterTooCloseCandidates(vector<vector<Point2f> > &candidates, vector<vector<Point> > &contours) {
+    filterTooCloseCandidates(vector<MarkerCandidateTree>& markerTree) {
         CV_Assert(detectorParams.minMarkerDistanceRate >= 0.);
+        vector<vector<Point2f>> candidates(markerTree.size());
+        vector<vector<Point>> contours(markerTree.size());
+        for(int i = 0; i < candidates.size(); i++) {
+            candidates[i] = markerTree[i].corners;
+            contours[i] = markerTree[i].contour;
+        }
         vector<MarkerCandidateTree> candidateTree(candidates.size());
         for(size_t i = 0ull; i < candidates.size(); i++) {
             candidateTree[i] = MarkerCandidateTree(std::move(candidates[i]), std::move(contours[i]));
+            candidateTree[i].level = markerTree[i].level;
         }
         candidates.clear();
         contours.clear();
+        markerTree.clear();
 
         // sort candidates from big to small
         std::stable_sort(candidateTree.begin(), candidateTree.end());
@@ -724,12 +743,19 @@ struct ArucoDetector::ArucoDetectorImpl {
         }
 
         for (vector<size_t>& grouped : groupedCandidates) {
-            if (detectorParams.detectInvertedMarker) // if detectInvertedMarker choose smallest contours
-                std::stable_sort(grouped.begin(), grouped.end(), [](const size_t &a, const size_t &b) {
+            if (detectorParams.detectInvertedMarker) {// if detectInvertedMarker choose smallest contours
+                std::stable_sort(grouped.begin(), grouped.end(), [&candidateTree](const size_t &a, const size_t &b) {
+                    if (candidateTree[a].level != candidateTree[b].level)
+                        return candidateTree[a].level < candidateTree[b].level;
                     return a > b;
                 });
+            }
             else // if detectInvertedMarker==false choose largest contours
-                std::stable_sort(grouped.begin(), grouped.end());
+                std::stable_sort(grouped.begin(), grouped.end(), [&candidateTree](const size_t &a, const size_t &b) {
+                    if (candidateTree[a].level != candidateTree[b].level)
+                        return candidateTree[a].level < candidateTree[b].level;
+                    return a < b;
+                });
             size_t currId = grouped[0];
             isSelectedContours[currId] = true;
             for (size_t i = 1ull; i < grouped.size(); i++) {
@@ -931,17 +957,29 @@ void ArucoDetector::detectMarkers(InputArray _image, OutputArrayOfArrays _corner
     vector<vector<Point> > contours;
     vector<int> ids;
 
+    vector<MarkerCandidateTree> markerTree;
     /// STEP 2.a Detect marker candidates :: using AprilTag
     if(detectorParams.cornerRefinementMethod == (int)CORNER_REFINE_APRILTAG){
         _apriltag(grey, detectorParams, candidates, contours);
     }
     /// STEP 2.b Detect marker candidates :: traditional way
     else {
-        arucoDetectorImpl->detectCandidates(grey, candidates, contours);
+        arucoDetectorImpl->detectCandidates(grey, markerTree, 0);
+        Mat greyPyramid = grey;
+        int depth = 0;
+        int min_size = min(grey.cols, grey.rows);
+        while (min_size >> depth > 400 && depth < 2) {
+            Mat res;
+            pyrDown(greyPyramid, res);
+            //resize(grey, greyPyramid, Size(), 0.5, 0.5);
+            depth++;
+            arucoDetectorImpl->detectCandidates(res, markerTree, depth);
+            greyPyramid = res;
+        }
     }
 
      /// STEP 2.c FILTER OUT NEAR CANDIDATE PAIRS
-    auto selectedCandidates = arucoDetectorImpl->filterTooCloseCandidates(candidates, contours);
+    auto selectedCandidates = arucoDetectorImpl->filterTooCloseCandidates(markerTree);
 
     /// STEP 2: Check candidate codification (identify markers)
     arucoDetectorImpl->identifyCandidates(grey, grey_pyramid, selectedCandidates, candidates, contours,
