@@ -159,16 +159,14 @@ int main(int argc, char *argv[]) {
         //! [aruco_detect_and_refine]
 
         // Estimate board pose
-        int markersOfBoardDetected = 0;
-        if(!ids.empty()) {
+        bool validPose = false;
+        if (!ids.empty() && camMatrix.total() != 0 && distCoeffs.total() != 0) {
             // Get object and image points for the solvePnP function
             cv::Mat objPoints, imgPoints;
             board.matchImagePoints(corners, ids, objPoints, imgPoints);
 
             // Find pose
-            cv::solvePnP(objPoints, imgPoints, camMatrix, distCoeffs, rvec, tvec);
-
-            markersOfBoardDetected = (int)objPoints.total() / 4;
+            validPose = solvePnP(objPoints, imgPoints, camMatrix, distCoeffs, rvec, tvec);
         }
 
         double currentTime = ((double)getTickCount() - tick) / getTickFrequency();
@@ -188,7 +186,7 @@ int main(int argc, char *argv[]) {
         if(showRejected && !rejected.empty())
             aruco::drawDetectedMarkers(imageCopy, rejected, noArray(), Scalar(100, 0, 255));
 
-        if(markersOfBoardDetected > 0)
+        if(validPose > 0)
             cv::drawFrameAxes(imageCopy, camMatrix, distCoeffs, rvec, tvec, axisLength);
 
         imshow("out", imageCopy);
