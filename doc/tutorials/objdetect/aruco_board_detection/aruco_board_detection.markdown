@@ -135,8 +135,8 @@ can be called by using the following code:
 
 @snippet samples/cpp/tutorial_code/objectDetection/create_board.cpp aruco_generate_board_image
 
-- The first parameter is the size of the output image in pixels. In this case 600x500 pixels. If this is not proportional
-to the board dimensions, it will be centered on the image.
+- The first parameter is the size of the output image in pixels. If this is not proportional o the board dimensions,
+it will be centered on the image.
 - `boardImage`: the output image with the board.
 - The third parameter is the (optional) margin in pixels, so none of the markers are touching the image border.
 In this case the margin is 10.
