@@ -4624,6 +4624,8 @@ struct PimplQRAruco : public ImplContour {
         aruco::Dictionary dictionary = aruco::Dictionary(byteList, 5, 4);
         aruco::DetectorParameters arucoParams;
         arucoParams.minMarkerPerimeterRate = 0.02;
+        //arucoParams.adaptiveThreshWinSizeMin = 27;
+        //arucoParams.adaptiveThreshWinSizeMax = 27;
         arucoDetector = aruco::ArucoDetector(dictionary, arucoParams);
     }
 
