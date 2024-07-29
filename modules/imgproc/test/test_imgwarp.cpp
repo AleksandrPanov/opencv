@@ -1542,16 +1542,16 @@ TEST(Imgproc_check_remap_type, test_remap_type_mapxy)
     randu(src, 0, 256);
     Mat map_x(src.size(), CV_32FC1), map_y(src.size(), CV_32FC1);
 
-    ASSERT_EQ(RemapType::fp32_mapx_mapy, check_and_get_remap_type(map_x, map_y));
+    ASSERT_EQ(RemapType::fp32_mapx_mapy, checkAndGetRemapType(map_x, map_y));
 
     Mat map_xy, emptyMat;
     Mat channels[2] = {map_x, map_y};
     merge(channels, 2, map_xy);
 
-    ASSERT_EQ(RemapType::fp32_mapxy, check_and_get_remap_type(map_xy, emptyMat));
+    ASSERT_EQ(RemapType::fp32_mapxy, checkAndGetRemapType(map_xy, emptyMat));
 
     map_xy.convertTo(map_xy, CV_16SC2);
-    ASSERT_EQ(RemapType::int16, check_and_get_remap_type(map_xy, emptyMat));
+    ASSERT_EQ(RemapType::int16, checkAndGetRemapType(map_xy, emptyMat));
 }
 
 TEST(Imgproc_check_remap_type, test_remap_type_fixed_point)
@@ -1562,21 +1562,35 @@ TEST(Imgproc_check_remap_type, test_remap_type_fixed_point)
     randu(src, 0, 256);
     Mat map_xy(src.size(), CV_16SC2), map_xy_fixed_point(src.size(), CV_16SC1);
 
-    ASSERT_EQ(RemapType::fixedPointInt16, check_and_get_remap_type(map_xy, map_xy_fixed_point));
+    ASSERT_EQ(RemapType::fixedPointQ16_5, checkAndGetRemapType(map_xy, map_xy_fixed_point));
 
     map_xy_fixed_point.convertTo(map_xy_fixed_point, CV_16UC1);
-    ASSERT_EQ(RemapType::fixedPointInt16, check_and_get_remap_type(map_xy, map_xy_fixed_point));
+    ASSERT_EQ(RemapType::fixedPointQ16_5, checkAndGetRemapType(map_xy, map_xy_fixed_point));
 }
 
-PARAM_TEST_CASE(ParamConvertMapsTest, std::tuple<int, int>, int, bool)
+template<typename T>
+void setRandMap(RNG& rng, Mat& mat)
+{
+    T* XY = mat.ptr<T>(0);
+    const float scols = static_cast<float>(mat.cols);
+    const float frows = static_cast<float>(mat.rows);
+    for (size_t i = 0; i < mat.total(); ++i)
+    {
+        XY[0] = static_cast<T>(rng.uniform(0.f, scols));
+        XY[1] = static_cast<T>(rng.uniform(0.f, frows));
+        XY += 2;
+    }
+}
+
+PARAM_TEST_CASE(ParamConvertMapsTest, std::tuple<int, int>, int, bool, cv::Size)
 {
     int map1Type;
     int map2Type;
     int dst1type;
     bool nninterpolate;
-    const int N = 21;
-    Mat map_x, map_y;
-    Mat src, dst1, dst2;
+    cv::Size size;
+    Mat map_x, map_y, fmap_xy;
+    Mat src, dst_map1, dst_map2;
 
     virtual void SetUp() override
     {
@@ -1584,36 +1598,51 @@ PARAM_TEST_CASE(ParamConvertMapsTest, std::tuple<int, int>, int, bool)
         map1Type = get<0>(types);
         map2Type = get<1>(types);
         dst1type = GET_PARAM(1);
-        nninterpolate = GET_PARAM(2);;
-
+        nninterpolate = GET_PARAM(2);
+        size = GET_PARAM(3);
+        RNG rng(0);
+        float scols = static_cast<float>(size.width);
+        float srows = static_cast<float>(size.height);
         if (map1Type > 0)
         {
-            map_x.create(N, N, map1Type);
-            randu(map_x, 0., N+0.);
+            map_x.create(size, map1Type);
+            if (map_x.channels() == 2)
+            {
+                if (map_x.type() == CV_32FC2)
+                    setRandMap<float>(rng, map_x);
+                else if (map_x.type() == CV_32SC2)
+                    setRandMap<int>(rng, map_x);
+                else if (map_x.type() == CV_16SC2)
+                    setRandMap<short>(rng, map_x);
+            }
+            else
+            {
+                randu(map_x, 0.f, scols);
+            }
         }
         if (map2Type > 0)
         {
-            map_y.create(N, N, map2Type);
-            if (map_y.depth() == CV_32F)
-                randu(map_y, 0., N+0.);
+            map_y.create(size, map2Type);
+            if (map_y.depth() == CV_32FC1)
+                randu(map_y, 0.f, srows);
             else
                 randu(map_y, 0, 1 << INTER_BITS2); // set fixed point map
         }
-        src.create(N, N, CV_8U);
+        src.create(size, CV_8U);
         randu(src, 0, 256);
+        convertMaps(map_x, map_y, fmap_xy, noArray(), CV_32FC2);
     }
 
     virtual void TearDown() override
     {
-        Mat map_xy, dst_map_xy, emptyMat, res1, res2;
-        convertMaps(map_x, map_y, map_xy, emptyMat, CV_32FC2);
-        convertMaps(dst1, dst2, dst_map_xy, emptyMat, CV_32FC2);
-        EXPECT_LE(cv::norm(map_xy, dst_map_xy, NORM_INF), 1.f);
+        Mat dst_map_xy, res1, res2;
+        convertMaps(dst_map1, dst_map2, dst_map_xy, noArray(), CV_32FC2);
+        EXPECT_LE(cv::norm(fmap_xy, dst_map_xy, NORM_INF), 1.f);
     }
 };
 
 #define test_float_types std::make_tuple(CV_32FC2, -1), std::make_tuple(CV_32FC1, CV_32FC1)
-#define test_int_types std::make_tuple(CV_16SC2, -1), std::make_tuple(-1, CV_16SC2)
+#define test_int_types std::make_tuple(CV_16SC2, -1), std::make_tuple(-1, CV_16SC2)//, std::make_tuple(CV_32SC2, -1)
 #define test_fixed_point_types std::make_tuple(CV_16SC2, CV_16SC1), std::make_tuple(CV_16SC2, CV_16UC1)
 
 struct Param_fp32 : public ParamConvertMapsTest {};
@@ -1624,39 +1653,65 @@ INSTANTIATE_TEST_CASE_P(/**/, Param_fp32, testing::Combine(Values(
         test_float_types, test_int_types, test_fixed_point_types
         ),
         Values(CV_32FC2, CV_32FC1),
-        Values(false, true)));
+        Values(false, true),  Values(cv::Size(21, 33)) ));
 
 INSTANTIATE_TEST_CASE_P(/**/, Param_fixedPoint, testing::Combine(Values(
-        test_float_types, test_int_types, test_fixed_point_types
+        test_float_types, test_int_types, test_fixed_point_types, std::make_tuple(CV_32SC2, -1)
         ),
         Values(CV_16SC2),
-        Values(false)));
+        Values(false), Values(cv::Size(21, 33)) ));
 
 INSTANTIATE_TEST_CASE_P(/**/, Param_int16, testing::Combine(Values(
-        test_float_types, test_int_types, test_fixed_point_types
+        test_float_types, test_int_types, test_fixed_point_types, std::make_tuple(CV_32SC2, -1),
+        std::make_tuple(CV_32SC2, CV_16UC1)
         ),
         Values(CV_16SC2),
-        Values(true)));
+        Values(true), Values(cv::Size(21, 33)) ));
 
 TEST_P(Param_fp32, test_convert_maps_to_fp32)
 {
-    convertMaps(map_x, map_y, dst1, dst2, dst1type, nninterpolate);
+    convertMaps(map_x, map_y, dst_map1, dst_map2, dst1type, nninterpolate);
     if (dst1type == CV_32FC2)
-        ASSERT_EQ(RemapType::fp32_mapxy, check_and_get_remap_type(dst1, dst2));
+        ASSERT_EQ(RemapType::fp32_mapxy, checkAndGetRemapType(dst_map1, dst_map2));
     else
-        ASSERT_EQ(RemapType::fp32_mapx_mapy, check_and_get_remap_type(dst1, dst2));
+        ASSERT_EQ(RemapType::fp32_mapx_mapy, checkAndGetRemapType(dst_map1, dst_map2));
 }
 
-TEST_P(Param_fixedPoint, test_convert_maps_to_fixedPointInt16)
+TEST_P(Param_fixedPoint, test_convert_maps_to_fixedPointQ16_5)
 {
-    convertMaps(map_x, map_y, dst1, dst2, dst1type, nninterpolate);
-    ASSERT_EQ(RemapType::fixedPointInt16, check_and_get_remap_type(dst1, dst2));
+    convertMaps(map_x, map_y, dst_map1, dst_map2, dst1type, nninterpolate);
+    ASSERT_EQ(RemapType::fixedPointQ16_5, checkAndGetRemapType(dst_map1, dst_map2));
 }
 
 TEST_P(Param_int16, test_convert_maps_to_Int16)
 {
-    convertMaps(map_x, map_y, dst1, dst2, dst1type, nninterpolate);
-    ASSERT_EQ(RemapType::int16, check_and_get_remap_type(dst1, dst2));
+    convertMaps(map_x, map_y, dst_map1, dst_map2, dst1type, nninterpolate);
+    ASSERT_EQ(RemapType::int16, checkAndGetRemapType(dst_map1, dst_map2));
+}
+
+struct Param_RemapTest : public ParamConvertMapsTest
+{
+    virtual void TearDown() override {}
+};
+
+INSTANTIATE_TEST_CASE_P(/**/, Param_RemapTest, testing::Combine(
+        Values(std::make_tuple(CV_32SC2, -1)),
+        Values(-1),
+        Values(true),
+        Values(cv::Size(8*32767, 33), cv::Size(60, 5*32767), cv::Size(80*32767, 7))
+        ));
+
+TEST_P(Param_RemapTest, large_img_remap)
+{
+    Mat dst, fdst;
+    double mmax, mmin;
+    minMaxLoc(map_x, &mmin, &mmax);
+    EXPECT_GE(mmax, SHRT_MAX);
+
+    remap(src, dst, map_x, noArray(), INTER_NEAREST);
+    convertMaps(map_x, noArray(), fmap_xy, noArray(), CV_32FC2);
+    remap(src, fdst, fmap_xy, noArray(), INTER_NEAREST);
+    EXPECT_LE(cv::norm(dst, fdst, NORM_INF), .1f);
 }
 
 //** @deprecated */

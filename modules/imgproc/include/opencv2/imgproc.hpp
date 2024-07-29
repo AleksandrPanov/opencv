@@ -2392,16 +2392,25 @@ The function remap transforms the source image using the specified map:
 where values of pixels with non-integer coordinates are computed using one of available
 interpolation methods. \f$map_x\f$ and \f$map_y\f$ can be encoded as separate floating-point maps
 in \f$map_1\f$ and \f$map_2\f$ respectively, or interleaved floating-point maps of \f$(x,y)\f$ in
-\f$map_1\f$, or fixed-point maps created by using convertMaps. The reason you might want to
+\f$map_1\f$, or fixed-point maps created by using convertMaps(). The reason you might want to
 convert from floating to fixed-point representations of a map is that they can yield much faster
-(\~2x) remapping operations. In the converted case, \f$map_1\f$ contains pairs (cvFloor(x),
-cvFloor(y)) and \f$map_2\f$ contains indices in a table of interpolation coefficients.
+(\~2x) remapping operations.
+Current implementation fixed-point numbers are denoted as Q16.5 in [Q number format](https://en.wikipedia.org/wiki/Q_(number_format)).
+\f$map_1\f$ contains pairs (cvFloor(x), cvFloor(y)) and \f$map_2\f$ contains 5 fraction bits of x and 5 fraction bits of y.
 
+In the fixed-point case to get fraction bits of \f$x_{i,j}\f$ use:
+@code
+map2.at<unsigned short>(i,j) % 32 // fraction bits value in [0, 31] range
+@endcode
+In the fixed-point case to get fraction bits of \f$y_{i,j}\f$ use:
+@code
+map2.at<unsigned short>(i,j) / 32 // fraction bits value in [0, 31] range
+@endcode
 This function cannot operate in-place.
 
 @param src Source image.
 @param dst Destination image. It has the same size as map1 and the same type as src .
-@param map1 The first map of either (x,y) points or just x values having the type CV_16SC2 ,
+@param map1 The first map of either (x,y) points or just x values having the type CV_32SC2, CV_16SC2,
 CV_32FC1, or CV_32FC2. See convertMaps for details on converting a floating point
 representation to fixed-point for speed.
 @param map2 The second map of y values having the type CV_16UC1, CV_32FC1, or none (empty map
@@ -2413,7 +2422,17 @@ borderMode=#BORDER_TRANSPARENT, it means that the pixels in the destination imag
 corresponds to the "outliers" in the source image are not modified by the function.
 @param borderValue Value used in case of a constant border. By default, it is 0.
 @note
-Due to current implementation limitations the size of an input and output images should be less than 32767x32767.
+remap() can support the input and output images with width/height large than 32767 if map1 has type CV_32SC2 or CV_32FC2.
+In other cases the width/height of the input and output images must be less than 32767.
+
+Supported combinations of map types:
+@code
+map1.type() == CV_32FC2 && map2.empty()             // fp32_mapxy
+map1.type() == CV_32FC1 && map2.type() == CV_32FC1  // fp32_mapx_mapy
+map1.type() == CV_16SC2 && map2.empty()             // int16
+map1.type() == CV_32SC2 && map2.empty()             // int32
+map1.type() == CV_16SC2 && map2.type() == CV_16UC1  // fixedPointQ16_5
+@endcode
  */
 CV_EXPORTS_W void remap( InputArray src, OutputArray dst,
                          InputArray map1, InputArray map2,
@@ -2439,6 +2458,9 @@ the original maps are stored in one 2-channel matrix (only when nninterpolation=
 (see remap ) are converted to a int16 representation (only when nninterpolation=true ).
 
 - \f$\texttt{(CV_32FC2)} \rightarrow \texttt{(CV_16SC2)}\f$. The same as above but
+the original maps are stored in one 2-channel matrix  (only when nninterpolation=true ).
+
+- \f$\texttt{(CV_32FC2)} \rightarrow \texttt{(CV_32SC2)}\f$. The same as above but
 the original maps are stored in one 2-channel matrix  (only when nninterpolation=true ).
 
 - \f$\texttt{(CV_16SC2, CV_16UC1)} \rightarrow \texttt{(CV_16SC2)}\f$. Original fixed-point maps

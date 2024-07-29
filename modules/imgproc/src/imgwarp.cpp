@@ -327,10 +327,12 @@ static inline int clip(int x, int a, int b)
 *                       General warping (affine, perspective, remap)                     *
 \****************************************************************************************/
 
-template<typename T>
+template<typename T, typename IdxType=short>
 static void remapNearest( const Mat& _src, Mat& _dst, const Mat& _xy,
                           int borderType, const Scalar& _borderValue )
 {
+    static_assert(std::is_same<short, IdxType>::value || std::is_same<int, IdxType>::value,
+                  "remapNearest for IdxType support only short or int");
     Size ssize = _src.size(), dsize = _dst.size();
     const int cn = _src.channels();
     const T* S0 = _src.ptr<T>();
@@ -351,7 +353,7 @@ static void remapNearest( const Mat& _src, Mat& _dst, const Mat& _xy,
     for(int dy = 0; dy < dsize.height; dy++ )
     {
         T* D = _dst.ptr<T>(dy);
-        const short* XY = _xy.ptr<short>(dy);
+        const IdxType* XY = _xy.ptr<IdxType>(dy);
 
         if( cn == 1 )
         {
@@ -1078,6 +1080,7 @@ typedef void (*RemapFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
                           const Mat& _fxy, const void* _wtab,
                           int borderType, const Scalar& _borderValue);
 
+template <class IdxType=short>
 class RemapInvoker :
     public ParallelLoopBody
 {
@@ -1089,6 +1092,8 @@ public:
         borderType(_borderType), borderValue(_borderValue),
         nnfunc(_nnfunc), ifunc(_ifunc), ctab(_ctab), remapType(_remapType)
     {
+        static_assert(std::is_same<short, IdxType>::value || std::is_same<int, IdxType>::value,
+                      "RemapInvoker for IdxType support only short or int");
     }
 
     virtual void operator() (const Range& range) const CV_OVERRIDE
@@ -1099,7 +1104,8 @@ public:
         int bcols0 = std::min(buf_size/brows0, dst->cols);
         brows0 = std::min(buf_size/bcols0, dst->rows);
 
-        Mat _bufxy(brows0, bcols0, CV_16SC2), _bufa;
+        Mat_<Vec<IdxType, 2>> _bufxy(brows0, bcols0);
+        Mat _bufa;
         if( !nnfunc )
             _bufa.create(brows0, bcols0, CV_16UC1);
 
@@ -1114,14 +1120,14 @@ public:
 
                 if( nnfunc )
                 {
-                    if (remapType == RemapType::int16) // the data is already in the right format
+                    if (remapType == RemapType::int16 || remapType == RemapType::int32) // the data is already in the right format
                         bufxy = (*m1)(Rect(x, y, bcols, brows));
-                    else if(remapType == RemapType::fixedPointInt16)
+                    else if(remapType == RemapType::fixedPointQ16_5 || remapType == RemapType::fixedPointQ32_5)
                     {
                         for( y1 = 0; y1 < brows; y1++ )
                         {
-                            short* XY = bufxy.ptr<short>(y1);
-                            const short* sXY = m1->ptr<short>(y+y1) + x*2;
+                            IdxType* XY = bufxy.ptr<IdxType>(y1);
+                            const IdxType* sXY = m1->ptr<IdxType>(y+y1) + x*2;
                             const ushort* sA = m2->ptr<ushort>(y+y1) + x;
 
                             for( x1 = 0; x1 < bcols; x1++ )
@@ -1179,7 +1185,7 @@ public:
                     short* XY = bufxy.ptr<short>(y1);
                     ushort* A = bufa.ptr<ushort>(y1);
 
-                    if (remapType == RemapType::fixedPointInt16)
+                    if (remapType == RemapType::fixedPointQ16_5)
                     {
                         bufxy = (*m1)(Rect(x, y, bcols, brows));
 
@@ -1304,8 +1310,8 @@ static bool ocl_remap(InputArray _src, OutputArray _dst, InputArray _map1, Input
     int cn = _src.channels(), type = _src.type(), depth = _src.depth(),
             rowsPerWI = dev.isIntel() ? 4 : 1;
 
-    if (borderType == BORDER_TRANSPARENT || !(interpolation == INTER_LINEAR || interpolation == INTER_NEAREST)
-            || _map2.type() == CV_16SC1)
+    if (borderType == BORDER_TRANSPARENT || !(interpolation == INTER_LINEAR || interpolation == INTER_NEAREST) ||
+        _map2.type() == CV_16SC1 || remapType == RemapType::int32 || remapType == RemapType::fixedPointQ32_5)
         return false;
 
     UMat src = _src.getUMat(), map1 = _map1.getUMat(), map2 = _map2.getUMat();
@@ -1317,7 +1323,7 @@ static bool ocl_remap(InputArray _src, OutputArray _dst, InputArray _map1, Input
         kernelName += "_32FC2";
     else if (remapType == RemapType::int16)
         kernelName += "_16SC2";
-    else if (remapType == RemapType::fixedPointInt16)
+    else if (remapType == RemapType::fixedPointQ16_5)
         kernelName += "_16SC2_16UC1";
     else if (remapType == RemapType::fp32_mapx_mapy)
         kernelName += "_2_32FC1";
@@ -1660,10 +1666,12 @@ void cv::remap( InputArray _src, OutputArray _dst,
 {
     CV_INSTRUMENT_REGION();
 
-    static RemapNNFunc nn_tab[] =
+    static RemapNNFunc nn_tab[][8] =
     {
-        remapNearest<uchar>, remapNearest<schar>, remapNearest<ushort>, remapNearest<short>,
-        remapNearest<int>, remapNearest<float>, remapNearest<double>, 0
+        {remapNearest<uchar, short>, remapNearest<schar, short>, remapNearest<ushort, short>, remapNearest<short, short>,
+         remapNearest<int, short>, remapNearest<float, short>, remapNearest<double, short>, nullptr},
+        {remapNearest<uchar, int>, remapNearest<schar, int>, remapNearest<ushort, int>, remapNearest<short, int>,
+         remapNearest<int, int>, remapNearest<float, int>, remapNearest<double, int>, nullptr}
     };
 
     static RemapFunc linear_tab[] =
@@ -1695,7 +1703,8 @@ void cv::remap( InputArray _src, OutputArray _dst,
 
     CV_Assert( !_map1.empty() );
     Mat src = _src.getMat(), map1 = _map1.getMat(), map2 = _map2.getMat();
-    const RemapType remapType = check_and_get_remap_type(map1, map2);
+    const RemapType remapType = checkAndGetRemapType(map1, map2);
+    CV_Assert(remapType != RemapType::fixedPointQ32_5);
 
     CV_OCL_RUN(_src.dims() <= 2 && _dst.isUMat(),
                ocl_remap(_src, _dst, _map1, _map2, interpolation, borderType, borderValue, remapType))
@@ -1714,8 +1723,15 @@ void cv::remap( InputArray _src, OutputArray _dst,
         ((borderType & BORDER_ISOLATED) != 0 || !src.isSubmatrix()),
         openvx_remap(src, dst, map1, map2, interpolation, borderValue));
 
-    CV_Assert( dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX );
+    bool isLargeImage = remapType == RemapType::int32; // || remapType == RemapType::fixedPointQ32_5;
+    if ((dst.cols >= SHRT_MAX || dst.rows >= SHRT_MAX || src.cols >= SHRT_MAX || src.rows >= SHRT_MAX)
+        && remapType == RemapType::fp32_mapxy)
+    {
+        isLargeImage = true;
+    }
+    CV_Assert( (dst.cols < SHRT_MAX && dst.rows < SHRT_MAX && src.cols < SHRT_MAX && src.rows < SHRT_MAX) || isLargeImage);
     CV_Assert( remapType != RemapType::int16 || interpolation == INTER_NEAREST );
+    CV_Assert( !isLargeImage || interpolation == INTER_NEAREST );
 
     if( dst.data == src.data )
         src = src.clone();
@@ -1773,8 +1789,8 @@ void cv::remap( InputArray _src, OutputArray _dst,
 
     if( interpolation == INTER_NEAREST )
     {
-        nnfunc = nn_tab[depth];
-        CV_Assert( nnfunc != 0 );
+        nnfunc = nn_tab[static_cast<int>(isLargeImage)][depth];
+        CV_Assert( nnfunc != nullptr );
     }
     else
     {
@@ -1796,10 +1812,18 @@ void cv::remap( InputArray _src, OutputArray _dst,
 
     const Mat *m1 = &map1, *m2 = &map2;
 
-    RemapInvoker invoker(src, dst, m1, m2,
-                         borderType, borderValue, nnfunc, ifunc,
-                         ctab, remapType);
-    parallel_for_(Range(0, dst.rows), invoker, dst.total()/(double)(1<<16));
+    if (!isLargeImage)
+    {
+        RemapInvoker<short> invoker(src, dst, m1, m2,
+                                    borderType, borderValue, nnfunc, ifunc,
+                                    ctab, remapType);
+        parallel_for_(Range(0, dst.rows), invoker, dst.total() / (double) (1 << 16));
+        return;
+    }
+    RemapInvoker<int> invoker(src, dst, m1, m2,
+                                borderType, borderValue, nnfunc, ifunc,
+                                ctab, remapType);
+    parallel_for_(Range(0, dst.rows), invoker, dst.total() / (double) (1 << 16));
 }
 
 
@@ -1810,12 +1834,12 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
     CV_INSTRUMENT_REGION();
 
     Mat map1 = _map1.getMat(), map2 = _map2.getMat(), dstmap1, dstmap2;
-    const RemapType inputRemapType = check_and_get_remap_type(map1, map2);
+    const RemapType inputRemapType = checkAndGetRemapType(map1, map2);
     Size size = map1.size();
     const Mat *m1 = &map1, *m2 = &map2;
     int m1type = m1->type();
 
-    RemapType outputRemapType = RemapType::errorType;
+    RemapType outputRemapType = RemapType::fp32_mapxy;
     if( dstm1type <= 0 )
         dstm1type = m1type == CV_16SC2 ? CV_32FC2 : CV_16SC2;
     CV_Assert( dstm1type == CV_16SC2 || dstm1type == CV_32FC1 || dstm1type == CV_32FC2 );
@@ -1834,17 +1858,25 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
     }
     else if (dstm1type == CV_16SC2 && !nninterpolate)
     {
-        outputRemapType = RemapType::fixedPointInt16;
+        outputRemapType = RemapType::fixedPointQ16_5;
     }
-    if (outputRemapType == RemapType::errorType)
-        CV_Error(cv::Error::StsBadSize, errorRemapMessage);
-
+    else if (dstm1type == CV_32SC2 && nninterpolate)
+    {
+        outputRemapType = RemapType::int32;
+    }
+    else if (dstm1type == CV_32SC2 && !nninterpolate)
+    {
+        outputRemapType = RemapType::fixedPointQ32_5;
+    }
+    else CV_Error(cv::Error::StsBadSize, format("convertMaps doesn't support this type dstm1type: %d, "
+                                                "nninterpolate: %d", dstm1type, nninterpolate));
     _dstmap1.create( size, dstm1type );
     dstmap1 = _dstmap1.getMat();
 
-    if (outputRemapType == RemapType::fp32_mapx_mapy || outputRemapType == RemapType::fixedPointInt16)
+    if (outputRemapType == RemapType::fp32_mapx_mapy || outputRemapType == RemapType::fixedPointQ16_5 ||
+        outputRemapType == RemapType::fixedPointQ32_5)
     {
-        _dstmap2.create( size, dstm1type == CV_16SC2 ? CV_16UC1 : CV_32FC1 );
+        _dstmap2.create( size, outputRemapType == RemapType::fp32_mapx_mapy ? CV_32FC1 : CV_16UC1);
         dstmap2 = _dstmap2.getMat();
     }
     else
@@ -1858,16 +1890,26 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
         return;
     }
 
-    if (inputRemapType == RemapType::fixedPointInt16 && outputRemapType == RemapType::int16)
+    if (inputRemapType == RemapType::fixedPointQ16_5 && outputRemapType == RemapType::int16)
     {
-        m1->copyTo(dstmap1);  // TODO: improved accuracy for inputRemapType fixedPointInt16
+        m1->copyTo(dstmap1);  // TODO: improved accuracy for inputRemapType fixedPointQ16_5
         return;
     }
 
-    if (inputRemapType == RemapType::int16 && outputRemapType == RemapType::fixedPointInt16)
+    if (inputRemapType == RemapType::fixedPointQ32_5 && (outputRemapType == RemapType::int16 ||
+                                                         outputRemapType == RemapType::fp32_mapxy))
+    {
+        m1->convertTo(dstmap1, dstmap1.type());  // TODO: improved accuracy
+        return;
+    }
+
+    if ((inputRemapType == RemapType::int16 || inputRemapType == RemapType::int32) &&
+        (outputRemapType == RemapType::fixedPointQ16_5 || outputRemapType == RemapType::int16 ||
+         outputRemapType == RemapType::fp32_mapxy))
     {
         m1->convertTo(dstmap1, dstmap1.type());
-        dstmap2 = Mat::zeros( size, CV_16UC1);
+        if (outputRemapType == RemapType::fixedPointQ16_5)
+            dstmap2 = Mat::zeros( size, CV_16UC1);
         return;
     }
 
@@ -1897,10 +1939,10 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
         size.width *= size.height;
         size.height = 1;
     }
-    CV_Assert((m1type == CV_32FC1 && dstm1type == CV_16SC2) || // fp32_mapx_mapy to int16 or fixedPointInt16
+    CV_Assert((m1type == CV_32FC1 && dstm1type == CV_16SC2) || // fp32_mapx_mapy to int16 or fixedPointQ16_5
               (m1type == CV_32FC2 && dstm1type == CV_16SC2 && !nninterpolate) || // fp32_mapxy to int16
-              (m1type == CV_16SC2 && dstm1type == CV_32FC1) || // int16 or fixedPointInt16 to fp32_mapx_mapy
-              (m1type == CV_16SC2 && dstm1type == CV_32FC2));  // int16 or fixedPointInt16 to fp32_mapxy
+              (m1type == CV_16SC2 && dstm1type == CV_32FC1) || // int16 or fixedPointQ16_5 to fp32_mapx_mapy
+              (m1type == CV_16SC2 && dstm1type == CV_32FC2));  // int16 or fixedPointQ16_5 to fp32_mapxy
 
 #if CV_TRY_SSE4_1
     bool useSSE4_1 = CV_CPU_HAS_SUPPORT_SSE4_1;
@@ -1997,7 +2039,7 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
         }
         else if( m1type == CV_32FC2 && dstm1type == CV_16SC2 )
         {
-            if(!nninterpolate) // inputRemapType == RemapType::fp32_mapxy && outputRemapType == RemapType::fixedPointInt16
+            if(!nninterpolate) // inputRemapType == RemapType::fp32_mapxy && outputRemapType == RemapType::fixedPointQ16_5
             {
                 #if CV_TRY_SSE4_1
                 if( useSSE4_1 )
