@@ -1030,6 +1030,108 @@ void BFMatcher::knnMatchImpl( InputArray _queryDescriptors, std::vector<std::vec
     }
 }
 
+bool PanoramaMatcher::compatiblePoints(const KeyPoint& next, const KeyPoint& prev)
+{
+    //int nexOctave = next.octave & 255;
+    //int prevOctave = prev.octave & 255;
+    // std::abs(next.angle - prev.angle) > 15.f
+    bool goodShift = abs(m_prevX) <= 2;
+    if (!goodShift)
+    {
+        //int delta = cvRound(next.pt.x - prev.pt.x) - m_prevX;
+        //goodShift = std::abs(delta) < std::abs(0.5*m_prevX) + 5;
+        const int coef = m_prevX > 0 ? 1 : -1;
+        const int absPrevX = m_prevX*coef;
+        const int absX = cvRound(next.pt.x - prev.pt.x) * coef;
+        goodShift = absX >= 0.5*absPrevX - 2 && absX <= 2.0*absPrevX+5; // TODO: допустить выход за рамки, но штрафовать
+    }
+    return std::abs(next.pt.y - prev.pt.y) <= m_maxShiftY && std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size) && goodShift;
+}
+
+std::vector<std::vector<DMatch> > PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX, InputArray mask)
+{
+    m_prevX = prevX;
+    Mat nextDescriptors = _nextDescriptors.getMat();
+    if(nextDescriptors.empty() || m_prevDescriptors.empty())
+    {
+        m_prevDescriptors = nextDescriptors;
+        m_prevKeypoints = keypoints;
+        return std::vector<std::vector<DMatch> >();
+    }
+    
+    const int K = 2;
+    std::vector<std::vector<DMatch> > matches(nextDescriptors.rows, std::vector<DMatch>(K));
+    Mat dist(nextDescriptors.rows, K, CV_32F, Scalar::all(FLT_MAX));
+    Mat nidx(dist.size(), CV_32S, Scalar::all(-1));
+
+
+    Mat& src1 = nextDescriptors;
+    Mat& src2 = m_prevDescriptors;
+    int nvecs = src2.rows;
+    int len   = src1.cols;
+
+
+    setNumThreads(1);
+    // Параллельный цикл по строкам src1
+    cv::parallel_for_(cv::Range(0, src1.rows), [&](const cv::Range& range) {
+        // Временный вектор пар (расстояние, индекс)
+        std::vector<std::pair<float, int>> pairs;
+        pairs.reserve(nvecs);
+        int thread_idx = getThreadNum();
+
+        for (int i = range.start; i < range.end; ++i)
+        {
+            const float* row1 = src1.ptr<float>(i);
+            // Вычисляем L2 расстояние до каждой строки src2
+            for (int j = 0; j < nvecs; ++j) {
+                pairs.emplace_back(FLT_MAX, j);
+                // TODO: здесь условия соответсвия
+                if (compatiblePoints(keypoints[i], m_prevKeypoints[j]))
+                {
+                    const float* row2 = src2.ptr<float>(j);
+                    float d = hal::normL2Sqr_(row1, row2, len);
+                    pairs.back().first = d;
+                }
+            }
+
+            // Находим K наименьших расстояний
+            if (K < nvecs) {
+                // Частичная сортировка: после nth_element первые K элементов —
+                // наименьшие (необязательно отсортированы)
+                std::nth_element(pairs.begin(), pairs.begin() + K, pairs.end());
+                // Сортируем первые K для упорядоченного вывода
+                std::sort(pairs.begin(), pairs.begin() + K);
+            } else {
+                // K == nvecs, нужна полная сортировка
+                std::sort(pairs.begin(), pairs.end());
+            }
+
+            // Записываем результаты в dist и nidx (update = 0, индексы без смещения)
+            float* dist_row = dist.ptr<float>(i);
+            int* nidx_row = nidx.ptr<int>(i);
+            for (int k = 0; k < K; ++k) {
+                matches[i][k].distance = pairs[k].first;
+                //matches[i][k].queryIdx = i;
+                //matches[i][k].trainIdx = pairs[k].second;
+                matches[i][k].queryIdx = pairs[k].second;
+                matches[i][k].trainIdx = i;
+                matches[i][k].imgIdx = keypoints[i].octave & 255;
+                //dist_row[k] = pairs[k].first;
+                //nidx_row[k] = pairs[k].second;
+            }
+
+            pairs.clear();
+        }
+    });
+
+
+
+    m_prevDescriptors = nextDescriptors;
+    m_prevKeypoints = keypoints;
+    return matches;
+}
+
+
 #ifdef HAVE_OPENCL
 static bool ocl_radiusMatch(InputArray query, InputArray _train, std::vector< std::vector<DMatch> > &matches,
         float maxDistance, int dstType, bool compactResult)

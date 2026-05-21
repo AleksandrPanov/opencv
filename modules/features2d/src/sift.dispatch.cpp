@@ -533,6 +533,10 @@ void SIFT_Impl::detectAndCompute(InputArray _image, InputArray _mask,
         actualNOctaves = maxOctave - firstOctave + 1;
     }
 
+    if (firstOctave == -1)
+    {
+        firstOctave = 0;
+    }
     Mat base = createInitialImage(image, firstOctave < 0, (float)sigma, enable_precise_upscale);
     std::vector<Mat> gpyr;
     int nOctaves = actualNOctaves > 0 ? actualNOctaves : cvRound(std::log( (double)std::min( base.cols, base.rows ) ) / std::log(2.) - 2) - firstOctave;

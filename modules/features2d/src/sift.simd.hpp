@@ -538,7 +538,7 @@ public:
                                             nOctaveLayers, (float)contrastThreshold,
                                             (float)edgeThreshold, (float)sigma) )
                         continue;
-                    float scl_octv = kpt.size*0.5f/(1 << o);
+                    /*float scl_octv = kpt.size*0.5f/(1 << o);
                     float omax = calcOrientationHist(gauss_pyr[o*(nOctaveLayers+3) + layer],
                                                      Point(c1, r1),
                                                      cvRound(SIFT_ORI_RADIUS * scl_octv),
@@ -560,7 +560,9 @@ public:
 
                             kpts_.push_back(kpt);
                         }
-                    }
+                    }*/
+                    kpt.angle = 0.f;
+                    kpts_.push_back(kpt);
                 }
             }
 
@@ -637,7 +639,7 @@ public:
                                             nOctaveLayers, (float)contrastThreshold,
                                             (float)edgeThreshold, (float)sigma) )
                         continue;
-                    float scl_octv = kpt.size*0.5f/(1 << o);
+                    /*float scl_octv = kpt.size*0.5f/(1 << o);
                     float omax = calcOrientationHist(gauss_pyr[o*(nOctaveLayers+3) + layer],
                                                      Point(c1, r1),
                                                      cvRound(SIFT_ORI_RADIUS * scl_octv),
@@ -660,6 +662,9 @@ public:
                             kpts_.push_back(kpt);
                         }
                     }
+                    */
+                    kpt.angle = 0.f;
+                    kpts_.push_back(kpt);
                 }
             }
         }

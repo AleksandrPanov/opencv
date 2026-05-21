@@ -1,6 +1,5 @@
 #include <iostream>
 #include "opencv2/core.hpp"
-#ifdef HAVE_OPENCV_XFEATURES2D
 #include "opencv2/highgui.hpp"
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
@@ -18,8 +17,10 @@ const char* keys =
 int main( int argc, char* argv[] )
 {
     CommandLineParser parser( argc, argv, keys );
-    Mat img1 = imread( samples::findFile( parser.get<String>("input1") ), IMREAD_GRAYSCALE );
-    Mat img2 = imread( samples::findFile( parser.get<String>("input2") ), IMREAD_GRAYSCALE );
+    std::string path = "D:/datasets/iss_cars/test/11-09-2025-19_12_05_323/";
+    Mat img1 = imread(path + "125.jpg", IMREAD_GRAYSCALE);
+    Mat img2 = imread(path + "126.jpg", IMREAD_GRAYSCALE);
+    Mat img3 = imread(path + "127.jpg", IMREAD_GRAYSCALE);
     if ( img1.empty() || img2.empty() )
     {
         cout << "Could not open or find the image!\n" << endl;
@@ -28,33 +29,34 @@ int main( int argc, char* argv[] )
     }
 
     //-- Step 1: Detect the keypoints using SURF Detector, compute the descriptors
-    int minHessian = 400;
-    Ptr<SURF> detector = SURF::create( minHessian );
-    std::vector<KeyPoint> keypoints1, keypoints2;
-    Mat descriptors1, descriptors2;
+    Ptr<SIFT> detector = SIFT::create();
+    std::vector<KeyPoint> keypoints1, keypoints2, keypoints3;
+    Mat descriptors1, descriptors2, descriptors3;
     detector->detectAndCompute( img1, noArray(), keypoints1, descriptors1 );
     detector->detectAndCompute( img2, noArray(), keypoints2, descriptors2 );
+    detector->detectAndCompute( img3, noArray(), keypoints3, descriptors3 );
 
     //-- Step 2: Matching descriptor vectors with a brute force matcher
     // Since SURF is a floating-point descriptor NORM_L2 is used
-    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::BRUTEFORCE);
+    Ptr<BFMatcher> matcher = BFMatcher::create();
     std::vector< DMatch > matches;
-    matcher->match( descriptors1, descriptors2, matches );
+
+    //matcher->match( descriptors1, descriptors2, matches );
+    //matcher->match( descriptors2, descriptors1, matches );
+
+    cv::PanoramaMatcher panoramaMatcher;
+    panoramaMatcher.custom_match(descriptors1, keypoints1);
+    auto knnMatches1 = panoramaMatcher.custom_match(descriptors2, keypoints2);
+    auto knnMatches2 = panoramaMatcher.custom_match(descriptors3, keypoints3, 24);
 
     //-- Draw matches
     Mat img_matches;
-    drawMatches( img1, keypoints1, img2, keypoints2, matches, img_matches );
+    //drawMatches( img1, keypoints1, img2, keypoints2, matches, img_matches );
+    //drawMatches(img2, keypoints2, img1, keypoints1, matches, img_matches );
 
     //-- Show detected matches
-    imshow("Matches", img_matches );
+    //imshow("Matches", img_matches );
 
-    waitKey();
+    //waitKey(0);
     return 0;
 }
-#else
-int main()
-{
-    std::cout << "This tutorial code needs the xfeatures2d contrib module to be run." << std::endl;
-    return 0;
-}
-#endif

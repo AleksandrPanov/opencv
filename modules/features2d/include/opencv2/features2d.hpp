@@ -1290,6 +1290,42 @@ protected:
     bool crossCheck;
 };
 
+
+struct CV_EXPORTS_W_SIMPLE FeatureHistory {
+    int count;
+    cv::Point2i pos;
+    cv::Point2f shift;
+
+    CV_WRAP FeatureHistory()
+    {
+        count = 0;
+        pos = {-1, -1};
+        shift = {0.f, 0.f};
+    }
+
+    static inline float alpha = 0.3f;
+};
+
+class CV_EXPORTS_W PanoramaMatcher
+{
+    cv::Mat m_prevDescriptors;
+    std::vector<KeyPoint> m_prevKeypoints;
+    Size2i frameSize;
+    int m_prevX;
+
+    bool compatiblePoints(const KeyPoint& next, const KeyPoint& prev);
+public:
+    CV_PROP_RW int m_maxShiftY;
+
+    CV_WRAP PanoramaMatcher()
+    {
+        m_maxShiftY = 5;
+        m_prevX = 0;
+    }
+    CV_WRAP std::vector<std::vector<DMatch> > custom_match(InputArray nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX=0, InputArray mask=noArray());
+};
+
+
 #if defined(HAVE_OPENCV_FLANN) || defined(CV_DOXYGEN)
 
 /** @brief Flann-based descriptor matcher.
