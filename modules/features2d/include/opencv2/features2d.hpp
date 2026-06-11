@@ -1310,17 +1310,33 @@ class CV_EXPORTS_W PanoramaMatcher
 {
     cv::Mat m_prevDescriptors;
     std::vector<KeyPoint> m_prevKeypoints;
-    Size2i frameSize;
     int m_prevX;
 
     bool compatiblePoints(const KeyPoint& next, const KeyPoint& prev);
 public:
+    CV_PROP_RW Size2i frameSize;
+    CV_PROP_RW bool m_carDetected;
     CV_PROP_RW int m_maxShiftY;
+    CV_PROP_RW float m_backgroundTileSize;
+    CV_PROP_RW int m_maxBackgroundFeatures;
+    CV_PROP_RW float m_backgroundThr;
+    CV_PROP_RW float m_backgroundDist;
+    CV_PROP_RW float m_maxShiftDiff;
+    CV_PROP_RW float m_minShiftDiff;
+    CV_PROP_RW float m_shiftDiff;
 
     CV_WRAP PanoramaMatcher()
     {
-        m_maxShiftY = 5;
+        m_carDetected = false;
         m_prevX = 0;
+        m_maxShiftY = 5;
+        m_backgroundTileSize = 20.f;
+        m_maxBackgroundFeatures = 4;
+        m_backgroundThr = 0.15f;
+        m_backgroundDist = 1.f;
+        m_maxShiftDiff = 2.f;
+        m_minShiftDiff = .5f;
+        m_shiftDiff = 2.f;
     }
     CV_WRAP std::vector<std::vector<DMatch> > custom_match(InputArray nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX=0, InputArray mask=noArray());
 };
