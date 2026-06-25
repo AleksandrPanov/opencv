@@ -1311,6 +1311,10 @@ class CV_EXPORTS_W PanoramaMatcher
     cv::Mat m_prevDescriptors;
     std::vector<KeyPoint> m_prevKeypoints;
 
+    // Результат сравнения положения prev относительно окна по y вокруг next.
+    enum class CompatY { PrevBelow = -1, Ok = 0, PrevAbove = 1 };
+
+    CompatY compatibleDistance(const KeyPoint& next, const KeyPoint& prev, int prevX);
     bool compatiblePoints(const KeyPoint& next, const KeyPoint& prev, int prevX);
 public:
     // init block

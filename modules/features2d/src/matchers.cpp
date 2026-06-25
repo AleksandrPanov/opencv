@@ -1031,7 +1031,15 @@ void BFMatcher::knnMatchImpl( InputArray _queryDescriptors, std::vector<std::vec
     }
 }
 
-bool PanoramaMatcher::compatiblePoints(const KeyPoint& next, const KeyPoint& prev, int prevX)
+PanoramaMatcher::CompatY PanoramaMatcher::compatibleDistance(const KeyPoint &next, const KeyPoint &prev, int prevX)
+{
+    const float dy = next.pt.y - prev.pt.y;
+    if (dy >  m_maxShiftY) return CompatY::PrevBelow; // prev.y слишком мал -> двигать нижнюю границу окна
+    if (dy < -m_maxShiftY) return CompatY::PrevAbove; // prev.y слишком велик -> дальше только больше по y
+    return CompatY::Ok;
+}
+
+bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &prev, int prevX)
 {
     //int nexOctave = next.octave & 255;
     //int prevOctave = prev.octave & 255;
@@ -1047,7 +1055,7 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint& next, const KeyPoint& pre
     {
         goodShift = true;
     }
-    return std::abs(next.pt.y - prev.pt.y) <= m_maxShiftY && std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size) && goodShift;
+    return std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size) && goodShift;
 }
 
 void PanoramaMatcher::init(Size2i frameSize)
@@ -1129,6 +1137,9 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
 
     const int K = 2;
     cv::parallel_for_(cv::Range(0, nextD.rows), [&](const cv::Range& range) {
+        // Нижняя граница y-окна в m_prevKeypoints. Монотонно растёт по i,
+        // т.к. keypoints[i] отсортированы по pt.y. Локальная переменная на поток.
+        int lowJ = 0;
         for (int i = range.start; i < range.end; ++i)
         {
             const float* row1 = nextD.ptr<float>(i);
@@ -1143,42 +1154,56 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
             // Временный вектор пар (расстояние, индекс)
             std::vector<std::pair<float, int>> pairs;
             pairs.reserve(nvecs);
-            // Вычисляем L2 расстояние до каждой строки m_prevDescriptors
-            for (int j = 0; j < nvecs; ++j) {
-                pairs.emplace_back(FLT_MAX, j);
-                // TODO: здесь условия соответсвия
+
+            // Продвигаем нижнюю границу окна: точки с малым y не вернутся
+            // в окно для будущих i, т.к. next.y не убывает по i.
+            // ожидаем что keypoints[i] и m_prevKeypoints[j] отсортированы по pt.y
+            while (lowJ < nvecs &&
+                   compatibleDistance(keypoints[i], m_prevKeypoints[lowJ], prevX) == CompatY::PrevBelow)
+                ++lowJ;
+
+            // Вычисляем L2 расстояние только по точкам внутри y-окна
+            for (int j = lowJ; j < nvecs; ++j) {
+                CompatY c = compatibleDistance(keypoints[i], m_prevKeypoints[j], prevX);
+                if (c == CompatY::PrevAbove)
+                    break; // дальше только больше по y
+                // c == CompatY::Ok (PrevBelow после продвижения lowJ внутри окна не встретится)
+                float d = FLT_MAX;
                 if (compatiblePoints(keypoints[i], m_prevKeypoints[j], prevX))
                 {
                     const float* row2 = m_prevDescriptors.ptr<float>(j);
-                    float d = hal::normL2Sqr_(row1, row2, descriptorLen);
-                    pairs.back().first = d;
+                    d = hal::normL2Sqr_(row1, row2, descriptorLen);
                 }
+                pairs.emplace_back(d, j);
             }
 
             // Находим K наименьших расстояний
-            if (K < nvecs) {
+            if (K < (int)pairs.size()) {
                 // Частичная сортировка: после nth_element первые K элементов —
                 // наименьшие (необязательно отсортированы)
                 std::nth_element(pairs.begin(), pairs.begin() + K, pairs.end());
                 // Сортируем первые K для упорядоченного вывода
                 std::sort(pairs.begin(), pairs.begin() + K);
             } else {
-                // K == nvecs, нужна полная сортировка
+                // кандидатов <= K, нужна полная сортировка
                 std::sort(pairs.begin(), pairs.end());
             }
 
-            if (pairs[0].first > m_siftDist)
+            const float d0 = pairs.empty()     ? FLT_MAX : pairs[0].first;
+            const float d1 = pairs.size() < 2  ? FLT_MAX : pairs[1].first;
+
+            if (d0 > m_siftDist)
             {
                 m_badMatches += 1;
             }
-            else if (pairs[0].first >= m_loweCoef*pairs[1].first)
+            else if (d0 >= m_loweCoef*d1)
             {
                 m_duplicateMatches += 1;
             }
             else
             {
                 cv::DMatch tmp;
-                tmp.distance = pairs[0].first;
+                tmp.distance = d0;
                 tmp.queryIdx = pairs[0].second;
                 tmp.trainIdx = i;
                 tmp.imgIdx = keypoints[i].octave & 255;
