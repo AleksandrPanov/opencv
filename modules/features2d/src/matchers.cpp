@@ -1035,7 +1035,6 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint& next, const KeyPoint& pre
 {
     //int nexOctave = next.octave & 255;
     //int prevOctave = prev.octave & 255;
-    // std::abs(next.angle - prev.angle) > 15.f
     bool goodShift = false; // TODO: первое обнаружение ТС даст большой скачок по смещению m_isTracked!!! abs(prevX) <= 2
     if (m_isTracked)
     {

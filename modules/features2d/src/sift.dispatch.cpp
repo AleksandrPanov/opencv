@@ -580,6 +580,12 @@ void SIFT_Impl::detectAndCompute(InputArray _image, InputArray _mask,
         //KeyPointsFilter::runByPixelsMask( keypoints, mask );
     }
 
+    // Sort keypoints by ascending pt.y after all filtering. Since calcDescriptors
+    // writes row i for keypoints[i], the descriptor matrix is produced already
+    // ordered by y without any per-row copying.
+    std::sort(keypoints.begin(), keypoints.end(),
+              [](const KeyPoint& a, const KeyPoint& b){ return a.pt.y < b.pt.y; });
+
     if( _descriptors.needed() )
     {
         //t = (double)getTickCount();

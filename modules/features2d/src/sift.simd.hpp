@@ -719,6 +719,8 @@ void calcSIFTDescriptor(
     CV_TRACE_FUNCTION();
 
     Point pt(cvRound(ptf.x), cvRound(ptf.y));
+    // For ori == 0 this yields cos_t = 1, sin_t = 0, so the sampling grid is
+    // axis-aligned and no rotation is applied to the descriptor neighborhood.
     float cos_t = cosf(ori*(float)(CV_PI/180));
     float sin_t = sinf(ori*(float)(CV_PI/180));
     float bins_per_rad = n / 360.f;
@@ -955,30 +957,23 @@ void calcSIFTDescriptor(
     k = 0;
 if( dstMat.type() == CV_32F )
 {
+    // RootSIFT finalization: L1-normalize the (L2-normalized) descriptor and
+    // take the element-wise square root. Multiplying rawDst by nrm2 before the
+    // L1 normalization cancels out, so this is equivalent to sqrt(L1norm(desc)),
+    // matching the reference Python compute_root_sift. The hysteresis clipping
+    // at 0.2 above is preserved.
     float* dst = dstMat.ptr<float>(row);
-#if (CV_SIMD || CV_SIMD_SCALABLE)
-    v_float32 __dst;
-    v_float32 __min = vx_setzero_f32();
-    v_float32 __max = vx_setall_f32(255.0f); // max of uchar
-    v_float32 __nrm2 = vx_setall_f32(nrm2);
-    for( k = 0; k <= len_ddn - VTraits<v_float32>::vlanes(); k += VTraits<v_float32>::vlanes() )
+    float nrm1 = 0;
+    for( k = 0; k < len_ddn; k++ )
     {
-        __dst = vx_load_aligned(rawDst + k);
-        __dst = v_min(v_max(v_cvt_f32(v_round(v_mul(__dst, __nrm2))), __min), __max);
-        v_store(dst + k, __dst);
+        rawDst[k] *= nrm2;
+        nrm1 += rawDst[k];
     }
-#endif
-#if defined(__GNUC__) && __GNUC__ >= 9
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"  // iteration XX invokes undefined behavior
-#endif
-    for( ; k < len_ddn; k++ )
+    nrm1 = 1.f/std::max(nrm1 + 1e-7f, FLT_EPSILON);
+    for( k = 0; k < len_ddn; k++ )
     {
-        dst[k] = saturate_cast<uchar>(rawDst[k]*nrm2);
+        dst[k] = std::sqrt(rawDst[k] * nrm1);
     }
-#if defined(__GNUC__) && __GNUC__ >= 9
-#pragma GCC diagnostic pop
-#endif
 }
 else // CV_8U
 {
