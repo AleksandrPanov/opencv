@@ -54,6 +54,7 @@
 #    pragma warning(disable:4714)  // const marked as __forceinline not inlined
 #  endif
 #  include <Eigen/Array>
+#include "features2d.hpp"
 #  if defined(_MSC_VER)
 #    pragma warning(pop)
 #  endif
@@ -1030,116 +1031,127 @@ void BFMatcher::knnMatchImpl( InputArray _queryDescriptors, std::vector<std::vec
     }
 }
 
-bool PanoramaMatcher::compatiblePoints(const KeyPoint& next, const KeyPoint& prev)
+bool PanoramaMatcher::compatiblePoints(const KeyPoint& next, const KeyPoint& prev, int prevX)
 {
     //int nexOctave = next.octave & 255;
     //int prevOctave = prev.octave & 255;
     // std::abs(next.angle - prev.angle) > 15.f
-    bool goodShift = !m_carDetected; // TODO: первое обнаружение ТС даст большой скачок по смещению m_carDetected!!! abs(m_prevX) <= 2
-    if (m_carDetected) // TODO добавить default ограничения
+    bool goodShift = false; // TODO: первое обнаружение ТС даст большой скачок по смещению m_isTracked!!! abs(prevX) <= 2
+    if (m_isTracked)
     {
         float nextX = next.pt.x - prev.pt.x;
-        const int coef = m_prevX >= 0 ? 1 : -1;
-        const int absPrevX = m_prevX*coef;
-        goodShift = absPrevX*m_minShiftDiff-m_shiftDiff <= nextX*coef && nextX*coef <= absPrevX*m_maxShiftDiff+m_shiftDiff;
-        //const int absX = cvRound(next.pt.x - prev.pt.x) * coef;
-        //goodShift = absX >= m_minShiftDiff*absPrevX-m_shiftDiff && absX <= m_maxShiftDiff*absPrevX+m_shiftDiff; // TODO: допустить выход за рамки, но штрафовать ?
+        const int coef = prevX >= 0 ? 1 : -1;
+        const int absPrevX = prevX*coef;
+        goodShift = absPrevX*m_minShiftDiff-m_shiftDiff <= nextX*coef && nextX*coef <= absPrevX*m_maxShiftDiff+m_shiftDiff; // TODO: допустить выход за рамки, но штрафовать ?
+    }
+    else // TODO добавить default ограничения на 3/4 кадра?
+    {
+        goodShift = true;
     }
     return std::abs(next.pt.y - prev.pt.y) <= m_maxShiftY && std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size) && goodShift;
 }
 
-std::vector<std::vector<DMatch> > PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX, InputArray mask)
+void PanoramaMatcher::init(Size2i frameSize)
 {
-    m_prevX = prevX;
-    Mat nextDescriptors = _nextDescriptors.getMat();
-    if(nextDescriptors.empty() || m_prevDescriptors.empty())
+    m_frameSize = frameSize;
+    m_isTracked = false;
+
+    Size2i numBlockInMask(std::max(1, cvRound(m_frameSize.width / m_backgroundTileSize)), std::max(1, cvRound(m_frameSize.height / m_backgroundTileSize))); //в области ~20x20 подсчитывается background фичи
+    m_backMask = Mat::zeros(numBlockInMask, CV_8UC1); // TODO: работа с маской требует обработки при распараллеливании
+    m_carMask = Mat::zeros(numBlockInMask, CV_8UC1);
+    m_prevDescriptors.release();
+    m_prevKeypoints.clear();
+}
+
+std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint> &keypoints, int prevX, InputArray mask)
+{
+    m_badMatches = 0;
+    m_backMatches = 0;
+    m_duplicateMatches = 0;
+
+
+    Mat nextD = _nextDescriptors.getMat();
+    if(nextD.empty() || m_prevDescriptors.empty())
     {
-        m_prevDescriptors = nextDescriptors;
+        m_prevDescriptors = nextD;
         m_prevKeypoints = keypoints;
-        return std::vector<std::vector<DMatch> >();
+        return std::vector<DMatch>();
     }
     
-    const int K = 2;
-    std::vector<std::vector<DMatch> > matches(nextDescriptors.rows, std::vector<DMatch>(K));
-    Mat dist(nextDescriptors.rows, K, CV_32F, Scalar::all(FLT_MAX));
-    Mat nidx(dist.size(), CV_32S, Scalar::all(-1));
+    std::vector<DMatch> matches(nextD.rows);
+    std::vector<DMatch> goodMatches;
+    goodMatches.reserve(std::max(100, nextD.rows / 10));
+    int nvecs = m_prevDescriptors.rows;
+    const int descriptorLen = nextD.cols;
 
-
-    Mat& src1 = nextDescriptors;
-    Mat& src2 = m_prevDescriptors;
-    int nvecs = src2.rows;
-    int len   = src1.cols;
-    Size2i numBlockInMask(std::max(1, cvRound(frameSize.width / m_backgroundTileSize)), std::max(1, cvRound(frameSize.height / m_backgroundTileSize))); //в области ~20x20 подсчитывается background фичи
-    Size2i sizeBlockInMask(frameSize.width / numBlockInMask.width + (int)(frameSize.width % numBlockInMask.width != 0),
-                           frameSize.height / numBlockInMask.height + (int)(frameSize.height % numBlockInMask.height != 0));
-    Mat backgroundMask = Mat::zeros(numBlockInMask, CV_16SC1); // TODO: работа с маской требует обработки при распараллеливании
+    m_backMask = cv::Scalar::all(0);
+    m_carMask = cv::Scalar::all(0);
+    Size2i sizeBlockInMask(m_frameSize.width / m_backMask.cols + (int)(m_frameSize.width % m_backMask.cols != 0),
+                           m_frameSize.height / m_backMask.rows + (int)(m_frameSize.height % m_backMask.rows != 0));
 
     setNumThreads(1);
-    // Параллельный цикл по строкам src1
-    cv::parallel_for_(cv::Range(0, src1.rows), [&](const cv::Range& range) {
+    // Параллельный цикл по строкам nextD
+    cv::parallel_for_(cv::Range(0, nextD.rows), [&](const cv::Range& range) {
         //int thread_idx = getThreadNum();
         for (int i = range.start; i < range.end; ++i)
         {
-            const float* row1 = src1.ptr<float>(i);
+            const float* row1 = nextD.ptr<float>(i);
             bool isBackground = false;
 
             // Проверяем фичи на принадлежность к фону
             for (int j = 0; j < nvecs; ++j)
             {
-                float dist = std::max(std::abs(keypoints[i].pt.x - m_prevKeypoints[j].pt.x), std::abs(keypoints[i].pt.y - m_prevKeypoints[j].pt.y));
-                if (dist <= m_backgroundDist)
+                float dist = (keypoints[i].pt.x - m_prevKeypoints[j].pt.x)*(keypoints[i].pt.x - m_prevKeypoints[j].pt.x) +
+                             (keypoints[i].pt.y - m_prevKeypoints[j].pt.y)*(keypoints[i].pt.y - m_prevKeypoints[j].pt.y) / 6.f;
+                if (dist <= m_backgroundDist*m_backgroundDist)
                 {
-                    const float* row2 = src2.ptr<float>(j);
-                    float d = hal::normL2Sqr_(row1, row2, len);
+                    const float* row2 = m_prevDescriptors.ptr<float>(j);
+                    float d = hal::normL2Sqr_(row1, row2, descriptorLen);
                     if (d < m_backgroundThr)
                     {
                         isBackground = true;
-                        for (int k = 0; k < K; ++k) {
-                            matches[i][k].distance = dist;
-                            matches[i][k].queryIdx = j;
-                            matches[i][k].trainIdx = i;
-                            matches[i][k].imgIdx = -2; // TODO: обработать точки с imgIdx==-2 как background
-                        }
+                        matches[i].distance = dist;
+                        matches[i].queryIdx = j;
+                        matches[i].trainIdx = i;
+                        matches[i].imgIdx = -2; // TODO: обработать точки с imgIdx==-2 как background
                         break;
                     }
                 }
-
             }
             if (isBackground)
             {
                 // найдём координату фичи фона в маске фона
-                Point2i pointInd((int)keypoints[i].pt.x/sizeBlockInMask.width, (int)keypoints[i].pt.y/sizeBlockInMask.height);
-                backgroundMask.at<int16_t>(pointInd) += 1;
+                Point2i pointInd((int)keypoints[i].pt.x / sizeBlockInMask.width, (int)keypoints[i].pt.y/sizeBlockInMask.height);
+                m_backMask.at<uint8_t>(pointInd) += uint8_t{1}; // TODO: заменить at на ptr
                 continue;
             }
         }
     });
 
-    cv::parallel_for_(cv::Range(0, src1.rows), [&](const cv::Range& range) {
+    const int K = 2;
+    cv::parallel_for_(cv::Range(0, nextD.rows), [&](const cv::Range& range) {
         for (int i = range.start; i < range.end; ++i)
         {
-            const float* row1 = src1.ptr<float>(i);
+            const float* row1 = nextD.ptr<float>(i);
             Point2i pointInd((int)keypoints[i].pt.x/sizeBlockInMask.width, (int)keypoints[i].pt.y/sizeBlockInMask.height);
-            bool isBackground = matches[i][0].imgIdx == -2 || backgroundMask.at<int16_t>(pointInd) > m_maxBackgroundFeatures;
+            bool isBackground = matches[i].imgIdx == -2 || m_backMask.at<uint8_t>(pointInd) > m_maxBackgroundFeatures; // TODO: заменить at на ptr
             if (isBackground)
             {
-                for (int k = 0; k < K; ++k)
-                {
-                    matches[i][k].imgIdx = -2; // TODO: обработать точки с imgIdx==-2 как background
-                }
+                m_backMatches += 1;
+                matches[i].imgIdx = -2; // TODO: обработать точки с imgIdx==-2 как background
                 continue;
             }
             // Временный вектор пар (расстояние, индекс)
             std::vector<std::pair<float, int>> pairs;
             pairs.reserve(nvecs);
-            // Вычисляем L2 расстояние до каждой строки src2
+            // Вычисляем L2 расстояние до каждой строки m_prevDescriptors
             for (int j = 0; j < nvecs; ++j) {
                 pairs.emplace_back(FLT_MAX, j);
                 // TODO: здесь условия соответсвия
-                if (compatiblePoints(keypoints[i], m_prevKeypoints[j]))
+                if (compatiblePoints(keypoints[i], m_prevKeypoints[j], prevX))
                 {
-                    const float* row2 = src2.ptr<float>(j);
-                    float d = hal::normL2Sqr_(row1, row2, len);
+                    const float* row2 = m_prevDescriptors.ptr<float>(j);
+                    float d = hal::normL2Sqr_(row1, row2, descriptorLen);
                     pairs.back().first = d;
                 }
             }
@@ -1156,29 +1168,29 @@ std::vector<std::vector<DMatch> > PanoramaMatcher::custom_match(InputArray _next
                 std::sort(pairs.begin(), pairs.end());
             }
 
-            // Записываем результаты в dist и nidx (update = 0, индексы без смещения)
-            //float* dist_row = dist.ptr<float>(i);
-            //int* nidx_row = nidx.ptr<int>(i);
-            for (int k = 0; k < K; ++k) {
-                matches[i][k].distance = pairs[k].first;
-                //matches[i][k].queryIdx = i;
-                //matches[i][k].trainIdx = pairs[k].second;
-                matches[i][k].queryIdx = pairs[k].second;
-                matches[i][k].trainIdx = i;
-                matches[i][k].imgIdx = keypoints[i].octave & 255;
-                //dist_row[k] = pairs[k].first;
-                //nidx_row[k] = pairs[k].second;
+            if (pairs[0].first > m_siftDist)
+            {
+                m_badMatches += 1;
             }
-
-            pairs.clear();
+            else if (pairs[0].first >= m_loweCoef*pairs[1].first)
+            {
+                m_duplicateMatches += 1;
+            }
+            else
+            {
+                cv::DMatch tmp;
+                tmp.distance = pairs[0].first;
+                tmp.queryIdx = pairs[0].second;
+                tmp.trainIdx = i;
+                tmp.imgIdx = keypoints[i].octave & 255;
+                goodMatches.emplace_back(tmp);
+            }
         }
     });
 
-
-
-    m_prevDescriptors = nextDescriptors;
+    m_prevDescriptors = nextD;
     m_prevKeypoints = keypoints;
-    return matches;
+    return goodMatches;
 }
 
 

@@ -1310,12 +1310,20 @@ class CV_EXPORTS_W PanoramaMatcher
 {
     cv::Mat m_prevDescriptors;
     std::vector<KeyPoint> m_prevKeypoints;
-    int m_prevX;
 
-    bool compatiblePoints(const KeyPoint& next, const KeyPoint& prev);
+    bool compatiblePoints(const KeyPoint& next, const KeyPoint& prev, int prevX);
 public:
-    CV_PROP_RW Size2i frameSize;
-    CV_PROP_RW bool m_carDetected;
+    // init block
+    CV_PROP_RW Mat m_backMask;
+    CV_PROP_RW Mat m_carMask;
+    CV_PROP_RW Size2i m_frameSize;
+    CV_PROP_RW bool m_isTracked;
+
+    // match params
+    CV_PROP_RW float m_siftDist;
+    CV_PROP_RW float m_loweCoef;
+
+
     CV_PROP_RW int m_maxShiftY;
     CV_PROP_RW float m_backgroundTileSize;
     CV_PROP_RW int m_maxBackgroundFeatures;
@@ -1325,10 +1333,17 @@ public:
     CV_PROP_RW float m_minShiftDiff;
     CV_PROP_RW float m_shiftDiff;
 
+    CV_PROP_RW int m_badMatches;
+    CV_PROP_RW int m_backMatches;
+    CV_PROP_RW int m_duplicateMatches;
+
     CV_WRAP PanoramaMatcher()
     {
-        m_carDetected = false;
-        m_prevX = 0;
+        m_isTracked = false;
+
+        m_siftDist = 0.18f;
+        m_loweCoef = 0.8f;
+
         m_maxShiftY = 5;
         m_backgroundTileSize = 20.f;
         m_maxBackgroundFeatures = 4;
@@ -1337,8 +1352,13 @@ public:
         m_maxShiftDiff = 2.f;
         m_minShiftDiff = .5f;
         m_shiftDiff = 2.f;
+
+        m_badMatches = 0;
+        m_backMatches = 0;
+        m_duplicateMatches = 0;
     }
-    CV_WRAP std::vector<std::vector<DMatch> > custom_match(InputArray nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX=0, InputArray mask=noArray());
+    CV_WRAP void init(Size2i _frameSize);
+    CV_WRAP std::vector<DMatch> custom_match(InputArray nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX, InputArray mask=noArray());
 };
 
 
