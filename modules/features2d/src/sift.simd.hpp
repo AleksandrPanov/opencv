@@ -719,8 +719,6 @@ void calcSIFTDescriptor(
     CV_TRACE_FUNCTION();
 
     Point pt(cvRound(ptf.x), cvRound(ptf.y));
-    // For ori == 0 this yields cos_t = 1, sin_t = 0, so the sampling grid is
-    // axis-aligned and no rotation is applied to the descriptor neighborhood.
     float cos_t = cosf(ori*(float)(CV_PI/180));
     float sin_t = sinf(ori*(float)(CV_PI/180));
     float bins_per_rad = n / 360.f;

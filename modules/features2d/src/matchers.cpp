@@ -1039,6 +1039,27 @@ PanoramaMatcher::CompatY PanoramaMatcher::compatibleDistance(const KeyPoint &nex
     return CompatY::Ok;
 }
 
+namespace {
+
+inline int parallelStripeIndex(const cv::Range& wholeRange, const cv::Range& range, int nstripes)
+{
+    const int len = wholeRange.end - wholeRange.start;
+    if (len <= 0 || nstripes <= 0)
+        return 0;
+    const int offset = range.start - wholeRange.start;
+    // Inverse of OpenCV parallel_for stripe mapping (parallel.cpp):
+    // r.start = wholeStart + (sr * len + nstripes/2) / nstripes
+    for (int i = nstripes - 1; i >= 0; --i)
+    {
+        const int stripeStart = (int)(((int64_t)i * len + nstripes / 2) / nstripes);
+        if (offset >= stripeStart)
+            return i;
+    }
+    return 0;
+}
+
+}
+
 bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &prev, int prevX)
 {
     //int nexOctave = next.octave & 255;
@@ -1055,6 +1076,7 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &pre
     {
         goodShift = true;
     }
+    // TODO: вынести сравнение с размером отдельно + добавить параметр std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size)
     return std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size) && goodShift;
 }
 
@@ -1095,11 +1117,17 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
     m_carMask = cv::Scalar::all(0);
     Size2i sizeBlockInMask(m_frameSize.width / m_backMask.cols + (int)(m_frameSize.width % m_backMask.cols != 0),
                            m_frameSize.height / m_backMask.rows + (int)(m_frameSize.height % m_backMask.rows != 0));
-
-    setNumThreads(1);
+    const cv::Range wholeRange(0, nextD.rows);
+    const int nstripes = std::max(1, std::min(cv::getNumThreads(), nextD.rows));
+    std::vector<cv::Mat> backMasks(nstripes);
+    for (auto& stripeMask : backMasks)
+    {
+        stripeMask = m_carMask.clone();
+    }
+    const float backgroundDist = m_backgroundDist*m_backgroundDist;
     // Параллельный цикл по строкам nextD
-    cv::parallel_for_(cv::Range(0, nextD.rows), [&](const cv::Range& range) {
-        //int thread_idx = getThreadNum();
+    cv::parallel_for_(wholeRange, [&](const cv::Range& range) {
+        const int stripe_idx = parallelStripeIndex(wholeRange, range, nstripes);
         for (int i = range.start; i < range.end; ++i)
         {
             const float* row1 = nextD.ptr<float>(i);
@@ -1110,7 +1138,7 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
             {
                 float dist = (keypoints[i].pt.x - m_prevKeypoints[j].pt.x)*(keypoints[i].pt.x - m_prevKeypoints[j].pt.x) +
                              (keypoints[i].pt.y - m_prevKeypoints[j].pt.y)*(keypoints[i].pt.y - m_prevKeypoints[j].pt.y) / 6.f;
-                if (dist <= m_backgroundDist*m_backgroundDist)
+                if (dist <= backgroundDist)
                 {
                     const float* row2 = m_prevDescriptors.ptr<float>(j);
                     float d = hal::normL2Sqr_(row1, row2, descriptorLen);
@@ -1129,16 +1157,30 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
             {
                 // найдём координату фичи фона в маске фона
                 Point2i pointInd((int)keypoints[i].pt.x / sizeBlockInMask.width, (int)keypoints[i].pt.y/sizeBlockInMask.height);
-                m_backMask.at<uint8_t>(pointInd) += uint8_t{1}; // TODO: заменить at на ptr
+                backMasks[stripe_idx].at<uint8_t>(pointInd) += uint8_t{1}; // TODO: заменить at на ptr
                 continue;
             }
         }
-    });
+    }, nstripes);
+
+    for (auto& mask : backMasks)
+    {
+        m_backMask += mask;
+    }
 
     const int K = 2;
-    cv::parallel_for_(cv::Range(0, nextD.rows), [&](const cv::Range& range) {
+    std::vector<std::vector<DMatch>> goodMatchesPerStripe(nstripes);
+    std::vector<int> backMatchesPerStripe(nstripes, 0);
+    std::vector<int> badMatchesPerStripe(nstripes, 0);
+    std::vector<int> duplicateMatchesPerStripe(nstripes, 0);
+    const int goodReserve = std::max(10, nextD.rows / std::max(1, 10 * nstripes));
+    for (auto& stripeMatches : goodMatchesPerStripe)
+        stripeMatches.reserve(goodReserve);
+
+    cv::parallel_for_(wholeRange, [&](const cv::Range& range) {
+        const int stripe_idx = parallelStripeIndex(wholeRange, range, nstripes);
         // Нижняя граница y-окна в m_prevKeypoints. Монотонно растёт по i,
-        // т.к. keypoints[i] отсортированы по pt.y. Локальная переменная на поток.
+        // т.к. keypoints[i] отсортированы по pt.y. Локальная переменная на stripe.
         int lowJ = 0;
         for (int i = range.start; i < range.end; ++i)
         {
@@ -1147,7 +1189,7 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
             bool isBackground = matches[i].imgIdx == -2 || m_backMask.at<uint8_t>(pointInd) > m_maxBackgroundFeatures; // TODO: заменить at на ptr
             if (isBackground)
             {
-                m_backMatches += 1;
+                backMatchesPerStripe[stripe_idx] += 1;
                 matches[i].imgIdx = -2; // TODO: обработать точки с imgIdx==-2 как background
                 continue;
             }
@@ -1194,11 +1236,11 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
 
             if (d0 > m_siftDist)
             {
-                m_badMatches += 1;
+                badMatchesPerStripe[stripe_idx] += 1;
             }
             else if (d0 >= m_loweCoef*d1)
             {
-                m_duplicateMatches += 1;
+                duplicateMatchesPerStripe[stripe_idx] += 1;
             }
             else
             {
@@ -1207,10 +1249,20 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
                 tmp.queryIdx = pairs[0].second;
                 tmp.trainIdx = i;
                 tmp.imgIdx = keypoints[i].octave & 255;
-                goodMatches.emplace_back(tmp);
+                goodMatchesPerStripe[stripe_idx].emplace_back(tmp);
             }
         }
-    });
+    }, nstripes);
+
+    for (int s = 0; s < nstripes; ++s)
+    {
+        m_backMatches += backMatchesPerStripe[s];
+        m_badMatches += badMatchesPerStripe[s];
+        m_duplicateMatches += duplicateMatchesPerStripe[s];
+        goodMatches.insert(goodMatches.end(),
+                           std::make_move_iterator(goodMatchesPerStripe[s].begin()),
+                           std::make_move_iterator(goodMatchesPerStripe[s].end()));
+    }
 
     m_prevDescriptors = nextD;
     m_prevKeypoints = keypoints;
