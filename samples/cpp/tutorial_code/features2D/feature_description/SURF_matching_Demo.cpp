@@ -28,37 +28,25 @@ int main( int argc, char* argv[] )
         return -1;
     }
 
-    //-- Step 1: Detect the keypoints using SURF Detector, compute the descriptors
-    Ptr<SIFT> detector = SIFT::create();
-    std::vector<KeyPoint> keypoints1, keypoints2, keypoints3;
-    Mat descriptors1, descriptors2, descriptors3;
-    detector->detectAndCompute( img1, noArray(), keypoints1, descriptors1 );
-    detector->detectAndCompute( img2, noArray(), keypoints2, descriptors2 );
-    detector->detectAndCompute( img3, noArray(), keypoints3, descriptors3 );
+    cv::Ptr<SIFT> sift = SIFT::create();
 
-    //-- Step 2: Matching descriptor vectors with a brute force matcher
-    // Since SURF is a floating-point descriptor NORM_L2 is used
-    std::vector< DMatch > matches;
-    //Ptr<BFMatcher> matcher = BFMatcher::create();
+    std::vector<cv::KeyPoint> kp1, kp2, kp3;
+    cv::Mat desc1, desc2, desc3;
+    sift->detectAndCompute(img1, cv::noArray(), kp1, desc1);
+    sift->detectAndCompute(img2, cv::noArray(), kp2, desc2);
 
-    //matcher->match( descriptors1, descriptors2, matches );
-    //matcher->match( descriptors2, descriptors1, matches );
+    PanoramaMatcher matcher;
+    matcher.init(img1.size());
 
-    cv::PanoramaMatcher panoramaMatcher;
-    std::cout << img1.size();
-    panoramaMatcher.init(img1.size());
-    panoramaMatcher.m_maxBackgroundFeatures = -1;
-    panoramaMatcher.custom_match(descriptors1, keypoints1, 0);
-    auto matches1 = panoramaMatcher.custom_match(descriptors2, keypoints2, 0);
-    auto matches2 = panoramaMatcher.custom_match(descriptors3, keypoints3, 24);
-
-    //-- Draw matches
-    Mat img_matches, img_matches2;
-    drawMatches(img1, keypoints1, img2, keypoints2, matches1, img_matches );
-     //-- Show detected matches
-    imshow("Matches", img_matches);
-    drawMatches(img2, keypoints2, img3, keypoints3, matches2, img_matches2 );
-    imshow("Matches2", img_matches2);
-    waitKey(0);
+    // First call primes the previous frame, second call produces matches.
+    matcher.custom_match(desc1, kp1, /*prevX=*/0);
+    auto matches = matcher.custom_match(desc2, kp2, /*prevX=*/0);
+    auto matches2 = matcher.custom_match(desc3, kp3, 24);
+    cv::Mat img_matches, img_matches2;
+    cv::drawMatches(img1, kp1, img2, kp2, matches, img_matches);
+    cv::drawMatches(img2, kp2, img3, kp3, matches2, img_matches2);
+    cv::imshow("panoram_Matches", img_matches);
+    cv::imshow("panoram_Matches2", img_matches2);
+    cv::waitKey(0);
     return 0;
 }

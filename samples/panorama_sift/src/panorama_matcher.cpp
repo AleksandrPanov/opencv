@@ -1,4 +1,4 @@
-// This file is part of the PanoramaSift sample library.
+﻿// This file is part of the PanoramaSift sample library.
 // Standalone copy of cv::PanoramaMatcher moved into namespace panoram.
 #include "precomp.hpp"
 
@@ -76,7 +76,7 @@ void PanoramaMatcher::init(Size2i frameSize)
     m_prevKeypoints.clear();
 }
 
-std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint> &keypoints, int prevX, InputArray mask)
+std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint> &keypoints, int prevX, InputArray _mask)
 {
     m_badMatches = 0;
     m_backMatches = 0;

@@ -1,14 +1,16 @@
 // This file is part of the PanoramaSift sample library.
-// Minimal stand-in for the build-generated OpenCV cvconfig.h. It is required
-// only because opencv2/core/private.hpp does `#include "cvconfig.h"`. Every
-// OpenCV configuration macro is consumed via `#ifdef`/`#if defined`, so an empty
-// configuration is safe here: features simply appear disabled to our sources.
-// If you need a specific OpenCV feature toggle, copy the matching define from
-// the cvconfig.h of the OpenCV build you link against.
-#ifndef PANORAMA_SIFT_CVCONFIG_H
-#define PANORAMA_SIFT_CVCONFIG_H
+// Stand-in for the build-generated OpenCV cvconfig.h.
+//
+// Must use the same include guard as OpenCV's cvconfig.h
+// (OPENCV_CVCONFIG_H_INCLUDED). Our copy is placed first on the include path
+// and force-included so the OpenCV build-tree cvconfig.h (which may define
+// HAVE_IPP and pull in ippicv.h) is never seen when compiling PanoramaSift.
+//
+// OpenCV private headers gate optional features with #ifdef HAVE_*; leaving them
+// undefined is safe — those code paths are simply not compiled into our TUs.
+#ifndef OPENCV_CVCONFIG_H_INCLUDED
+#define OPENCV_CVCONFIG_H_INCLUDED
 
-/* Define to build with the same C++ standard as the OpenCV headers expect. */
-/* Intentionally left without HAVE_* toggles. */
+/* Intentionally no HAVE_* toggles. */
 
-#endif // PANORAMA_SIFT_CVCONFIG_H
+#endif // OPENCV_CVCONFIG_H_INCLUDED

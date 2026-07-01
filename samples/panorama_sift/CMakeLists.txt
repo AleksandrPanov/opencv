@@ -72,6 +72,18 @@ target_compile_definitions(panorama_sift
         CV_ENABLE_INTRINSICS
 )
 
+# Force our minimal cvconfig.h before any OpenCV header can pull in the
+# build-tree cvconfig.h (HAVE_IPP -> ippicv.h, which we do not ship).
+if(MSVC)
+    target_compile_options(panorama_sift PRIVATE
+        "/FI${CMAKE_CURRENT_SOURCE_DIR}/config/cvconfig.h"
+    )
+else()
+    target_compile_options(panorama_sift PRIVATE
+        "-include" "${CMAKE_CURRENT_SOURCE_DIR}/config/cvconfig.h"
+    )
+endif()
+
 target_link_libraries(panorama_sift PRIVATE ${OpenCV_LIBS})
 
 # ---------------------------------------------------------------------------
@@ -121,19 +133,28 @@ set(_defs_avx512
     CV_CPU_COMPILE_AVX512_SKX=1
 )
 
-set_source_files_properties(src/sift.sse4_1.cpp PROPERTIES
-    COMPILE_DEFINITIONS "${_defs_sse4_1}"
-    COMPILE_FLAGS "${_flags_sse4_1}"
-)
-set_source_files_properties(src/sift.avx2.cpp PROPERTIES
-    COMPILE_DEFINITIONS "${_defs_avx2}"
-    COMPILE_FLAGS "${_flags_avx2}"
-)
-if(PANORAMA_SIFT_ENABLE_AVX512)
-    set_source_files_properties(src/sift.avx512_skx.cpp PROPERTIES
-        COMPILE_DEFINITIONS "${_defs_avx512}"
-        COMPILE_FLAGS "${_flags_avx512}"
+# Per-source dispatch flags must stay on sift.{sse4_1,avx2,avx512_skx}.cpp only.
+# Re-applied at the end of configure (DEFER) so a parent add_subdirectory() cannot
+# accidentally replace them with a global target_compile_definitions(panorama_sift ...).
+function(_panorama_sift_apply_cpu_dispatch_flags)
+    set_source_files_properties(src/sift.sse4_1.cpp PROPERTIES
+        COMPILE_DEFINITIONS "${_defs_sse4_1}"
+        COMPILE_FLAGS "${_flags_sse4_1}"
     )
+    set_source_files_properties(src/sift.avx2.cpp PROPERTIES
+        COMPILE_DEFINITIONS "${_defs_avx2}"
+        COMPILE_FLAGS "${_flags_avx2}"
+    )
+    if(PANORAMA_SIFT_ENABLE_AVX512)
+        set_source_files_properties(src/sift.avx512_skx.cpp PROPERTIES
+            COMPILE_DEFINITIONS "${_defs_avx512}"
+            COMPILE_FLAGS "${_flags_avx512}"
+        )
+    endif()
+endfunction()
+_panorama_sift_apply_cpu_dispatch_flags()
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
+    cmake_language(DEFER CALL _panorama_sift_apply_cpu_dispatch_flags)
 endif()
 
 # ---------------------------------------------------------------------------

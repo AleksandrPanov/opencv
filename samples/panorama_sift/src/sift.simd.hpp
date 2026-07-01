@@ -73,11 +73,14 @@
 
 #include <opencv2/core/hal/hal.hpp>
 #include "opencv2/core/hal/intrin.hpp"
+#include "intrin_compat.hpp"
 #include <opencv2/core/utils/buffer_area.private.hpp>
 
 namespace panoram {
 
 using namespace cv;
+// v_float32, VTraits, vx_*, v_* live in cv::hal_<mode>, not directly in cv::
+using namespace cv::CV_CPU_OPTIMIZATION_HAL_NAMESPACE;
 
 #if !defined(CV_CPU_DISPATCH_MODE) || !defined(CV_CPU_OPTIMIZATION_DECLARATIONS_ONLY)
 /******************************* Defs and macros *****************************/
