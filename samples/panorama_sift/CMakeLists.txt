@@ -38,7 +38,26 @@ if(PANORAMA_SIFT_ENABLE_AVX512)
     list(APPEND PANORAMA_SIFT_SOURCES src/sift.avx512_skx.cpp)
 endif()
 
-add_library(panorama_sift SHARED ${PANORAMA_SIFT_SOURCES})
+set(PANORAMA_SIFT_SRC_HEADERS
+    src/precomp.hpp
+    src/intrin_compat.hpp
+    src/sift.simd.hpp
+    src/sift.simd_declarations.hpp
+)
+set(PANORAMA_SIFT_PUBLIC_HEADERS
+    include/panorama_sift/export.hpp
+    include/panorama_sift/panorama_matcher.hpp
+    include/panorama_sift/panorama_sift.hpp
+)
+set(PANORAMA_SIFT_HEADERS ${PANORAMA_SIFT_SRC_HEADERS} ${PANORAMA_SIFT_PUBLIC_HEADERS})
+
+add_library(panorama_sift SHARED ${PANORAMA_SIFT_SOURCES} ${PANORAMA_SIFT_HEADERS})
+
+# Show all implementation and public headers under the "src" node in VS/IDE.
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX src
+    FILES ${PANORAMA_SIFT_SOURCES} ${PANORAMA_SIFT_SRC_HEADERS})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/include/panorama_sift PREFIX src
+    FILES ${PANORAMA_SIFT_PUBLIC_HEADERS})
 
 # ---------------------------------------------------------------------------
 # Include directories. Order matters: our config/ and vendor/ copies of the
