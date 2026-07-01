@@ -1336,6 +1336,7 @@ public:
     CV_PROP_RW float m_maxShiftDiff;
     CV_PROP_RW float m_minShiftDiff;
     CV_PROP_RW float m_shiftDiff;
+    CV_PROP_RW float m_sizeDiff; // acceptable feature size difference: min(size1, size2) > m_sizeDiff*max(size1, size2)
 
     CV_PROP_RW int m_badMatches;
     CV_PROP_RW int m_backMatches;
@@ -1356,6 +1357,7 @@ public:
         m_maxShiftDiff = 2.f;
         m_minShiftDiff = .5f;
         m_shiftDiff = 2.f;
+        m_sizeDiff = 0.8f;
 
         m_badMatches = 0;
         m_backMatches = 0;

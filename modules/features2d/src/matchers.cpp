@@ -1077,7 +1077,7 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &pre
         goodShift = true;
     }
     // TODO: вынести сравнение с размером отдельно + добавить параметр std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size)
-    return std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size) && goodShift;
+    return std::max(next.size, prev.size)*m_sizeDiff < std::min(next.size, prev.size) && goodShift;
 }
 
 void PanoramaMatcher::init(Size2i frameSize)
