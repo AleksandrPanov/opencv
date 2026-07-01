@@ -1,7 +1,14 @@
 # PanoramaSift: a standalone shared library that re-exports OpenCV's SIFT and
-# PanoramaMatcher inside namespace `panoram`. It is built against an *installed*
-# OpenCV (find_package) and vendors the few generated/private headers OpenCV does
-# not always install (see config/ and vendor/).
+# PanoramaMatcher inside namespace `panoram`.
+#
+# This is a fully external library: it is always configured on its own and links
+# an OpenCV found via find_package(OpenCV). It does NOT need to be built inside
+# the OpenCV source tree. Point it at an OpenCV install or build tree with
+# -DOpenCV_DIR=<path containing OpenCVConfig.cmake>.
+#
+# The library vendors the few generated/private headers OpenCV does not always
+# install (see config/ and vendor/); those directories are placed first on the
+# include path so they win over the installed copies.
 cmake_minimum_required(VERSION 3.16)
 project(panorama_sift LANGUAGES CXX)
 
@@ -14,9 +21,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(PANORAMA_SIFT_ENABLE_AVX512 "Compile the AVX512_SKX SIFT dispatch TU" ON)
-option(PANORAMA_SIFT_BUILD_EXAMPLE "Build the small usage example" OFF)
+option(PANORAMA_SIFT_BUILD_EXAMPLE "Build the small usage example" ON)
 
-find_package(OpenCV REQUIRED COMPONENTS core imgproc features2d)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc features2d imgcodecs highgui)
 
 # ---------------------------------------------------------------------------
 # Sources
@@ -36,13 +43,16 @@ add_library(panorama_sift SHARED ${PANORAMA_SIFT_SOURCES})
 # ---------------------------------------------------------------------------
 # Include directories. Order matters: our config/ and vendor/ copies of the
 # generated/private OpenCV headers must be found before the installed OpenCV
-# headers so the CPU dispatch machinery resolves cvconfig.h / cv_cpu_config.h.
+# headers so the CPU dispatch machinery resolves cvconfig.h / cv_cpu_config.h
+# to our copies. BEFORE prepends them on the target.
 # ---------------------------------------------------------------------------
+target_include_directories(panorama_sift BEFORE PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/config
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 target_include_directories(panorama_sift
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/config
-        ${CMAKE_CURRENT_SOURCE_DIR}/vendor
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OpenCV_INCLUDE_DIRS}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -127,6 +137,14 @@ if(PANORAMA_SIFT_ENABLE_AVX512)
 endif()
 
 # ---------------------------------------------------------------------------
+# Example
+# ---------------------------------------------------------------------------
+if(PANORAMA_SIFT_BUILD_EXAMPLE)
+    add_executable(panorama_sift_example example/main.cpp)
+    target_link_libraries(panorama_sift_example PRIVATE panorama_sift ${OpenCV_LIBS})
+endif()
+
+# ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)
@@ -136,8 +154,3 @@ install(TARGETS panorama_sift
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-if(PANORAMA_SIFT_BUILD_EXAMPLE)
-    add_executable(panorama_sift_example example/main.cpp)
-    target_link_libraries(panorama_sift_example PRIVATE panorama_sift ${OpenCV_LIBS})
-endif()

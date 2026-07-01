@@ -1,0 +1,45 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 16,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msvc-base",
+      "hidden": true,
+      "generator": "Visual Studio 18 2026",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      }
+    },
+    {
+      "name": "panorama-sift",
+      "displayName": "PanoramaSift",
+      "description": "Standalone PanoramaSift library (../../build/panorama_sift)",
+      "inherits": "msvc-base",
+      "binaryDir": "${sourceDir}/../../../build/panorama_sift",
+      "cacheVariables": {
+        "OpenCV_DIR": "${sourceDir}/../../../build",
+        "PANORAMA_SIFT_BUILD_EXAMPLE": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "panorama-sift-debug",
+      "displayName": "PanoramaSift Debug",
+      "configurePreset": "panorama-sift",
+      "configuration": "Debug"
+    },
+    {
+      "name": "panorama-sift-release",
+      "displayName": "PanoramaSift Release",
+      "configurePreset": "panorama-sift",
+      "configuration": "Release"
+    }
+  ]
+}

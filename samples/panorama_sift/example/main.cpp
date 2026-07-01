@@ -5,24 +5,34 @@
 #include "panorama_sift/panorama_matcher.hpp"
 
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 
 #include <iostream>
 #include <vector>
 
 int main(int argc, char** argv)
 {
-    if (argc < 3)
-    {
-        std::cerr << "Usage: " << argv[0] << " <frame1> <frame2>\n";
-        return 1;
-    }
+    //if (argc < 3)
+    //{
+    //    std::cerr << "Usage: " << argv[0] << " <frame1> <frame2>\n";
+    //    return 1;
+    //}
+    //cv::Mat img1 = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
+    //cv::Mat img2 = cv::imread(argv[2], cv::IMREAD_GRAYSCALE);
+    //if (img1.empty() || img2.empty())
+    //{
+    //    std::cerr << "Failed to load input images\n";
+    //    return 1;
+    //}
 
-    cv::Mat img1 = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
-    cv::Mat img2 = cv::imread(argv[2], cv::IMREAD_GRAYSCALE);
-    if (img1.empty() || img2.empty())
+    std::string path = "C:/Users/a-panov/PycharmProjects/data_fg_bg/test/11-09-2025-19_12_05_323/";
+    cv::Mat img1 = cv::imread(path + "125.jpg", cv::IMREAD_GRAYSCALE);
+    cv::Mat img2 = cv::imread(path + "126.jpg", cv::IMREAD_GRAYSCALE);
+    cv::Mat img3 = cv::imread(path + "127.jpg", cv::IMREAD_GRAYSCALE);
+    if ( img1.empty() || img2.empty() )
     {
-        std::cerr << "Failed to load input images\n";
-        return 1;
+        std::cout << "Could not open or find the image!\n" << std::endl;
+        return -1;
     }
 
     cv::Ptr<panoram::SIFT> sift = panoram::SIFT::create();
@@ -38,6 +48,11 @@ int main(int argc, char** argv)
     // First call primes the previous frame, second call produces matches.
     matcher.custom_match(desc1, kp1, /*prevX=*/0);
     std::vector<cv::DMatch> matches = matcher.custom_match(desc2, kp2, /*prevX=*/0);
+    cv::Mat img_matches;
+    cv::drawMatches(img1, kp1, img2, kp2, matches, img_matches);
+    cv::imshow("Matches", img_matches);
+    cv::waitKey(0);
+
 
     std::cout << "keypoints: " << kp1.size() << " / " << kp2.size() << "\n";
     std::cout << "good matches: " << matches.size()

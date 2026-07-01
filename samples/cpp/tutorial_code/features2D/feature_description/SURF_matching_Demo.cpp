@@ -53,13 +53,12 @@ int main( int argc, char* argv[] )
     auto matches2 = panoramaMatcher.custom_match(descriptors3, keypoints3, 24);
 
     //-- Draw matches
-    Mat img_matches;
+    Mat img_matches, img_matches2;
     drawMatches(img1, keypoints1, img2, keypoints2, matches1, img_matches );
      //-- Show detected matches
     imshow("Matches", img_matches);
-    waitKey(0);
-    drawMatches(img2, keypoints2, img3, keypoints3, matches2, img_matches );
-    imshow("Matches", img_matches);
+    drawMatches(img2, keypoints2, img3, keypoints3, matches2, img_matches2 );
+    imshow("Matches2", img_matches2);
     waitKey(0);
     return 0;
 }
