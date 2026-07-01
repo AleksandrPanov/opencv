@@ -37,8 +37,8 @@ int main(int argc, char** argv)
 
     cv::Ptr<panoram::SIFT> sift = panoram::SIFT::create();
 
-    std::vector<cv::KeyPoint> kp1, kp2;
-    cv::Mat desc1, desc2;
+    std::vector<cv::KeyPoint> kp1, kp2, kp3;
+    cv::Mat desc1, desc2, desc3;
     sift->detectAndCompute(img1, cv::noArray(), kp1, desc1);
     sift->detectAndCompute(img2, cv::noArray(), kp2, desc2);
 
@@ -48,9 +48,12 @@ int main(int argc, char** argv)
     // First call primes the previous frame, second call produces matches.
     matcher.custom_match(desc1, kp1, /*prevX=*/0);
     std::vector<cv::DMatch> matches = matcher.custom_match(desc2, kp2, /*prevX=*/0);
-    cv::Mat img_matches;
+    auto matches2 = matcher.custom_match(desc3, kp3, 24);
+    cv::Mat img_matches, img_matches2;
     cv::drawMatches(img1, kp1, img2, kp2, matches, img_matches);
-    cv::imshow("Matches", img_matches);
+    cv::drawMatches(img2, kp2, img3, kp3, matches2, img_matches2);
+    cv::imshow("panoram_Matches", img_matches);
+    cv::imshow("panoram_Matches2", img_matches2);
     cv::waitKey(0);
 
 
