@@ -74,8 +74,7 @@
 #include <opencv2/core/utils/tls.hpp>
 #include <opencv2/core/utils/logger.hpp>
 
-#include "sift.simd.hpp"
-#include "sift.simd_declarations.hpp" // defines CV_CPU_DISPATCH_MODES_ALL=AVX2,...,BASELINE based on CMakeLists.txt content
+#include "sift.simd.hpp" // AVX2 baseline implementation in namespace panoram::cpu_baseline
 
 #include "panorama_sift/panorama_sift.hpp"
 
@@ -350,8 +349,7 @@ public:
 
         std::vector<KeyPoint>& kpts = tls_kpts_struct.getRef();
 
-        CV_CPU_DISPATCH(findScaleSpaceExtrema, (o, i, threshold, idx, step, cols, nOctaveLayers, contrastThreshold, edgeThreshold, sigma, gauss_pyr, dog_pyr, kpts, range),
-            CV_CPU_DISPATCH_MODES_ALL);
+        cpu_baseline::findScaleSpaceExtrema(o, i, threshold, idx, step, cols, nOctaveLayers, contrastThreshold, edgeThreshold, sigma, gauss_pyr, dog_pyr, kpts, range);
     }
 private:
     int o, i;
@@ -414,8 +412,7 @@ void calcSIFTDescriptor(
 {
     CV_TRACE_FUNCTION();
 
-    CV_CPU_DISPATCH(calcSIFTDescriptor, (img, ptf, ori, scl, d, n, dst, row),
-        CV_CPU_DISPATCH_MODES_ALL);
+    cpu_baseline::calcSIFTDescriptor(img, ptf, ori, scl, d, n, dst, row);
 }
 
 class calcDescriptorsComputer : public ParallelLoopBody

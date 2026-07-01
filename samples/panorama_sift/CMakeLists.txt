@@ -20,7 +20,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-option(PANORAMA_SIFT_ENABLE_AVX512 "Compile the AVX512_SKX SIFT dispatch TU" ON)
 option(PANORAMA_SIFT_BUILD_EXAMPLE "Build the small usage example" ON)
 
 find_package(OpenCV REQUIRED COMPONENTS core imgproc features2d imgcodecs highgui)
@@ -30,19 +29,13 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc features2d imgcodecs highgu
 # ---------------------------------------------------------------------------
 set(PANORAMA_SIFT_SOURCES
     src/sift.dispatch.cpp
-    src/sift.sse4_1.cpp
-    src/sift.avx2.cpp
     src/panorama_matcher.cpp
 )
-if(PANORAMA_SIFT_ENABLE_AVX512)
-    list(APPEND PANORAMA_SIFT_SOURCES src/sift.avx512_skx.cpp)
-endif()
 
 set(PANORAMA_SIFT_SRC_HEADERS
     src/precomp.hpp
     src/intrin_compat.hpp
     src/sift.simd.hpp
-    src/sift.simd_declarations.hpp
 )
 set(PANORAMA_SIFT_PUBLIC_HEADERS
     include/panorama_sift/export.hpp
@@ -80,7 +73,8 @@ target_include_directories(panorama_sift
 
 # ---------------------------------------------------------------------------
 # Common definitions.
-#  - __OPENCV_BUILD enables the private CPU dispatch headers (cv_cpu_dispatch.h).
+#  - __OPENCV_BUILD enables the private CPU headers (cv_cpu_dispatch.h) that pull
+#    in the SIMD intrinsics based on config/cv_cpu_config.h.
 #  - PANORAMA_SIFT_BUILD switches export.hpp to dllexport.
 #  - CV_ENABLE_INTRINSICS turns on the SIMD code paths.
 # ---------------------------------------------------------------------------
@@ -106,74 +100,15 @@ endif()
 target_link_libraries(panorama_sift PRIVATE ${OpenCV_LIBS})
 
 # ---------------------------------------------------------------------------
-# Per-source CPU dispatch mode + compiler flags.
-# Definitions follow OpenCV's CPU_<OPT>_IMPLIES chains; flags follow
-# OpenCVCompilerOptimizations.cmake. The baseline (SSE/SSE2/SSE3) comes from
-# config/cv_cpu_config.h and applies to every TU.
+# CPU features. Runtime dispatch has been removed: the target machine is assumed
+# to support AVX2. AVX2 is the compile-time baseline (see config/cv_cpu_config.h),
+# so the whole target is built with AVX2 code generation. There are NO per-source
+# dispatch flags and no CV_CPU_DISPATCH_MODE.
 # ---------------------------------------------------------------------------
 if(MSVC)
-    set(_flags_sse4_1  "")
-    set(_flags_avx2    "/arch:AVX2")
-    set(_flags_avx512  "/arch:AVX512")
+    target_compile_options(panorama_sift PRIVATE "/arch:AVX2")
 else()
-    set(_flags_sse4_1  "-msse4.1")
-    set(_flags_avx2    "-mavx2 -mfma -mf16c")
-    set(_flags_avx512  "-mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mfma -mf16c")
-endif()
-
-set(_defs_sse4_1
-    CV_CPU_DISPATCH_MODE=SSE4_1
-    CV_CPU_COMPILE_SSSE3=1
-    CV_CPU_COMPILE_SSE4_1=1
-)
-set(_defs_avx2
-    CV_CPU_DISPATCH_MODE=AVX2
-    CV_CPU_COMPILE_SSSE3=1
-    CV_CPU_COMPILE_SSE4_1=1
-    CV_CPU_COMPILE_SSE4_2=1
-    CV_CPU_COMPILE_POPCNT=1
-    CV_CPU_COMPILE_FP16=1
-    CV_CPU_COMPILE_AVX=1
-    CV_CPU_COMPILE_FMA3=1
-    CV_CPU_COMPILE_AVX2=1
-)
-set(_defs_avx512
-    CV_CPU_DISPATCH_MODE=AVX512_SKX
-    CV_CPU_COMPILE_SSSE3=1
-    CV_CPU_COMPILE_SSE4_1=1
-    CV_CPU_COMPILE_SSE4_2=1
-    CV_CPU_COMPILE_POPCNT=1
-    CV_CPU_COMPILE_FP16=1
-    CV_CPU_COMPILE_AVX=1
-    CV_CPU_COMPILE_FMA3=1
-    CV_CPU_COMPILE_AVX2=1
-    CV_CPU_COMPILE_AVX_512F=1
-    CV_CPU_COMPILE_AVX512_COMMON=1
-    CV_CPU_COMPILE_AVX512_SKX=1
-)
-
-# Per-source dispatch flags must stay on sift.{sse4_1,avx2,avx512_skx}.cpp only.
-# Re-applied at the end of configure (DEFER) so a parent add_subdirectory() cannot
-# accidentally replace them with a global target_compile_definitions(panorama_sift ...).
-function(_panorama_sift_apply_cpu_dispatch_flags)
-    set_source_files_properties(src/sift.sse4_1.cpp PROPERTIES
-        COMPILE_DEFINITIONS "${_defs_sse4_1}"
-        COMPILE_FLAGS "${_flags_sse4_1}"
-    )
-    set_source_files_properties(src/sift.avx2.cpp PROPERTIES
-        COMPILE_DEFINITIONS "${_defs_avx2}"
-        COMPILE_FLAGS "${_flags_avx2}"
-    )
-    if(PANORAMA_SIFT_ENABLE_AVX512)
-        set_source_files_properties(src/sift.avx512_skx.cpp PROPERTIES
-            COMPILE_DEFINITIONS "${_defs_avx512}"
-            COMPILE_FLAGS "${_flags_avx512}"
-        )
-    endif()
-endfunction()
-_panorama_sift_apply_cpu_dispatch_flags()
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
-    cmake_language(DEFER CALL _panorama_sift_apply_cpu_dispatch_flags)
+    target_compile_options(panorama_sift PRIVATE -mavx2 -mfma -mf16c)
 endif()
 
 # ---------------------------------------------------------------------------
