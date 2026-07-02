@@ -543,6 +543,7 @@ public:
                                             nOctaveLayers, (float)contrastThreshold,
                                             (float)edgeThreshold, (float)sigma) )
                         continue;
+                    // FIXED: отключены повороты, так как они не нужны для панорамы
                     /*float scl_octv = kpt.size*0.5f/(1 << o);
                     float omax = calcOrientationHist(gauss_pyr[o*(nOctaveLayers+3) + layer],
                                                      Point(c1, r1),
@@ -644,6 +645,7 @@ public:
                                             nOctaveLayers, (float)contrastThreshold,
                                             (float)edgeThreshold, (float)sigma) )
                         continue;
+                    // FIXED: отключены повороты, так как они не нужны для панорамы
                     /*float scl_octv = kpt.size*0.5f/(1 << o);
                     float omax = calcOrientationHist(gauss_pyr[o*(nOctaveLayers+3) + layer],
                                                      Point(c1, r1),
@@ -960,8 +962,8 @@ void calcSIFTDescriptor(
     k = 0;
 if( dstMat.type() == CV_32F )
 {
-    // RootSIFT finalization: L1-normalize the (L2-normalized) descriptor and
-    // take the element-wise square root. Multiplying rawDst by nrm2 before the
+    // FIXED: added RootSIFT finalization: L1-normalize the (L2-normalized) descriptor
+    // and take the element-wise square root. Multiplying rawDst by nrm2 before the
     // L1 normalization cancels out, so this is equivalent to sqrt(L1norm(desc)),
     // matching the reference Python compute_root_sift. The hysteresis clipping
     // at 0.2 above is preserved.

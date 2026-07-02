@@ -1,4 +1,4 @@
-// This file is part of the PanoramaSift sample library.
+﻿// This file is part of the PanoramaSift sample library.
 // Minimal usage example: detect SIFT features on two frames and match them with
 // PanoramaMatcher. Build with -DPANORAMA_SIFT_BUILD_EXAMPLE=ON.
 #include "panorama_sift/panorama_sift.hpp"
@@ -12,35 +12,27 @@
 
 int main(int argc, char** argv)
 {
-    //if (argc < 3)
-    //{
-    //    std::cerr << "Usage: " << argv[0] << " <frame1> <frame2>\n";
-    //    return 1;
-    //}
-    //cv::Mat img1 = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
-    //cv::Mat img2 = cv::imread(argv[2], cv::IMREAD_GRAYSCALE);
-    //if (img1.empty() || img2.empty())
-    //{
-    //    std::cerr << "Failed to load input images\n";
-    //    return 1;
-    //}
-
-    std::string path = "C:/Users/a-panov/PycharmProjects/data_fg_bg/test/11-09-2025-19_12_05_323/";
-    cv::Mat img1 = cv::imread(path + "125.jpg", cv::IMREAD_GRAYSCALE);
-    cv::Mat img2 = cv::imread(path + "126.jpg", cv::IMREAD_GRAYSCALE);
-    cv::Mat img3 = cv::imread(path + "127.jpg", cv::IMREAD_GRAYSCALE);
-    if ( img1.empty() || img2.empty() )
+    if (argc < 4)
     {
-        std::cout << "Could not open or find the image!\n" << std::endl;
-        return -1;
+        std::cerr << "Usage: " << argv[0] << " <frame1> <frame2> <frame3>\n";
+        return 1;
+    }
+    cv::Mat img1 = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
+    cv::Mat img2 = cv::imread(argv[2], cv::IMREAD_GRAYSCALE);
+    cv::Mat img3 = cv::imread(argv[3], cv::IMREAD_GRAYSCALE);
+    if (img1.empty() || img2.empty() || img3.empty())
+    {
+        std::cerr << "Failed to load input images\n";
+        return 1;
     }
 
-    cv::Ptr<panoram::SIFT> sift = panoram::SIFT::create();
+    cv::Ptr<panoram::SIFT> sift = panoram::SIFT::create(1500, 3, 0.03, 30., 0.8);
 
     std::vector<cv::KeyPoint> kp1, kp2, kp3;
     cv::Mat desc1, desc2, desc3;
     sift->detectAndCompute(img1, cv::noArray(), kp1, desc1);
     sift->detectAndCompute(img2, cv::noArray(), kp2, desc2);
+    sift->detectAndCompute(img3, cv::noArray(), kp3, desc3);
 
     panoram::PanoramaMatcher matcher;
     matcher.init(img1.size());
@@ -57,7 +49,7 @@ int main(int argc, char** argv)
     cv::waitKey(0);
 
 
-    std::cout << "keypoints: " << kp1.size() << " / " << kp2.size() << "\n";
+    std::cout << "keypoints: " << kp1.size() << " / " << kp2.size() << " / " << kp3.size() << "\n";
     std::cout << "good matches: " << matches.size()
               << " (bad=" << matcher.m_badMatches
               << ", background=" << matcher.m_backMatches

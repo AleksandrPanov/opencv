@@ -1,4 +1,4 @@
-// This file is part of OpenCV project.
+﻿// This file is part of OpenCV project.
 // It is subject to the license terms in the LICENSE file found in the top-level directory
 // of this distribution and at http://opencv.org/license.html.
 //
@@ -534,6 +534,7 @@ void SIFT_Impl::detectAndCompute(InputArray _image, InputArray _mask,
         actualNOctaves = maxOctave - firstOctave + 1;
     }
 
+    // FIXED: убрано удвоение размера изображения
     if (firstOctave == -1)
     {
         firstOctave = 0;
@@ -581,7 +582,7 @@ void SIFT_Impl::detectAndCompute(InputArray _image, InputArray _mask,
         //KeyPointsFilter::runByPixelsMask( keypoints, mask );
     }
 
-    // Sort keypoints by ascending pt.y after all filtering. Since calcDescriptors
+    // FIXED: Sort keypoints by ascending pt.y after all filtering. Since calcDescriptors
     // writes row i for keypoints[i], the descriptor matrix is produced already
     // ordered by y without any per-row copying.
     std::sort(keypoints.begin(), keypoints.end(),
