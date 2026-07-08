@@ -63,6 +63,13 @@ public:
 
     virtual void setSigma(double sigma) = 0;
     virtual double getSigma() const = 0;
+
+    // Смещение, прибавляемое к координатам ключевых точек в detectAndCompute.
+    void setOffset(Point2f offset) { m_offset = offset; }
+    Point2f getOffset() const { return m_offset; }
+
+protected:
+    Point2f m_offset = Point2f(0.f, 0.f);
 };
 
 typedef SIFT SiftFeatureDetector;

@@ -342,6 +342,13 @@ public:
 
     CV_WRAP virtual void setSigma(double sigma) = 0;
     CV_WRAP virtual double getSigma() const = 0;
+
+    // Смещение, прибавляемое к координатам ключевых точек в detectAndCompute.
+    CV_WRAP void setOffset(Point2f offset) { m_offset = offset; }
+    CV_WRAP Point2f getOffset() const { return m_offset; }
+
+protected:
+    Point2f m_offset = Point2f(0.f, 0.f);
 };
 
 typedef SIFT SiftFeatureDetector;

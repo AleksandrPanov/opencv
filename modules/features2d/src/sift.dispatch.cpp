@@ -597,6 +597,10 @@ void SIFT_Impl::detectAndCompute(InputArray _image, InputArray _mask,
         //t = (double)getTickCount() - t;
         //printf("descriptor extraction time: %g\n", t*1000./tf);
     }
+
+    if( m_offset.x != 0.f || m_offset.y != 0.f )
+        for( size_t i = 0; i < keypoints.size(); i++ )
+            keypoints[i].pt += m_offset;
 }
 
 void SIFT_Impl::read( const FileNode& fn)
