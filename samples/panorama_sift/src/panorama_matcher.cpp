@@ -60,7 +60,6 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &pre
     {
         goodShift = true;
     }
-    // TODO: вынести сравнение с размером отдельно + добавить параметр std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size)
     return std::max(next.size, prev.size)*m_sizeDiff < std::min(next.size, prev.size) && goodShift;
 }
 
@@ -81,7 +80,6 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
     m_badMatches = 0;
     m_backMatches = 0;
     m_duplicateMatches = 0;
-
 
     Mat nextD = _nextDescriptors.getMat();
     if(nextD.empty() || m_prevDescriptors.empty())

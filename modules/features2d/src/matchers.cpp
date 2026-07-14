@@ -1076,7 +1076,6 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &pre
     {
         goodShift = true;
     }
-    // TODO: вынести сравнение с размером отдельно + добавить параметр std::max(next.size, prev.size)*.8f < std::min(next.size, prev.size)
     return std::max(next.size, prev.size)*m_sizeDiff < std::min(next.size, prev.size) && goodShift;
 }
 
@@ -1128,14 +1127,25 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
     // Параллельный цикл по строкам nextD
     cv::parallel_for_(wholeRange, [&](const cv::Range& range) {
         const int stripe_idx = parallelStripeIndex(wholeRange, range, nstripes);
+        // Нижняя граница y-окна в m_prevKeypoints. Монотонно растёт по i,
+        // т.к. keypoints[i] отсортированы по pt.y. Локальная переменная на stripe.
+        int lowJ = 0;
         for (int i = range.start; i < range.end; ++i)
         {
             const float* row1 = nextD.ptr<float>(i);
             bool isBackground = false;
 
             // Проверяем фичи на принадлежность к фону
-            for (int j = 0; j < nvecs; ++j)
+            while (lowJ < nvecs &&
+                   compatibleDistance(keypoints[i], m_prevKeypoints[lowJ], prevX) == CompatY::PrevBelow)
+                ++lowJ;
+
+            for (int j = lowJ; j < nvecs; ++j)
             {
+                CompatY c = compatibleDistance(keypoints[i], m_prevKeypoints[j], prevX);
+                if (c == CompatY::PrevAbove)
+                    break; // дальше только больше по y
+
                 float dist = (keypoints[i].pt.x - m_prevKeypoints[j].pt.x)*(keypoints[i].pt.x - m_prevKeypoints[j].pt.x) +
                              (keypoints[i].pt.y - m_prevKeypoints[j].pt.y)*(keypoints[i].pt.y - m_prevKeypoints[j].pt.y) / 6.f;
                 if (dist <= backgroundDist)
