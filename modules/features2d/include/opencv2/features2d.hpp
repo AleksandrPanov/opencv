@@ -1323,11 +1323,18 @@ class CV_EXPORTS_W PanoramaMatcher
 
     CompatY compatibleDistance(const KeyPoint& next, const KeyPoint& prev, int prevX);
     bool compatiblePoints(const KeyPoint& next, const KeyPoint& prev, int prevX);
+    Point2i getBlockInd(const KeyPoint& kp) const
+    {
+        return Point2i(((int)kp.pt.x - m_cropOffset.width) / m_sizeBlockInMask.width,
+                       ((int)kp.pt.y - m_cropOffset.height) / m_sizeBlockInMask.height);
+    }
 public:
     // init block
     CV_PROP_RW Mat m_backMask;
     CV_PROP_RW Mat m_carMask;
     CV_PROP_RW Size2i m_frameSize;
+    Size2i m_cropOffset;
+    Size2i m_sizeBlockInMask;
     CV_PROP_RW bool m_isTracked;
 
     // match params
@@ -1357,21 +1364,21 @@ public:
         m_loweCoef = 0.8f;
 
         m_maxShiftY = 5;
-        m_backgroundTileSize = 20.f;
-        m_maxBackgroundFeatures = 4;
-        m_backgroundThr = 0.15f;
-        m_backgroundDist = 1.f;
+        m_backgroundTileSize = 32.f;
+        m_maxBackgroundFeatures = 2;
+        m_backgroundThr = 0.14f;
+        m_backgroundDist = 0.75f;
         m_maxShiftDiff = 2.f;
         m_minShiftDiff = .5f;
-        m_shiftDiff = 2.f;
+        m_shiftDiff = 5.f;
         m_sizeDiff = 0.8f;
 
         m_badMatches = 0;
         m_backMatches = 0;
         m_duplicateMatches = 0;
     }
-    CV_WRAP void init(Size2i _frameSize);
-    CV_WRAP std::vector<DMatch> custom_match(InputArray nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX, InputArray mask=noArray());
+    CV_WRAP void init(Size2i frameSize, Size2i _offset);
+    CV_WRAP std::vector<DMatch> custom_match(InputArray nextDescriptors, const std::vector<KeyPoint>& keypoints, int prevX);
 };
 
 

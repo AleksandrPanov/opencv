@@ -36,7 +36,7 @@ int main( int argc, char* argv[] )
     sift->detectAndCompute(img2, cv::noArray(), kp2, desc2);
 
     PanoramaMatcher matcher;
-    matcher.init(img1.size());
+    matcher.init(img1.size(), {0, 0});
 
     // First call primes the previous frame, second call produces matches.
     matcher.custom_match(desc1, kp1, /*prevX=*/0);

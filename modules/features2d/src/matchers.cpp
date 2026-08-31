@@ -1079,24 +1079,26 @@ bool PanoramaMatcher::compatiblePoints(const KeyPoint &next, const KeyPoint &pre
     return std::max(next.size, prev.size)*m_sizeDiff < std::min(next.size, prev.size) && goodShift;
 }
 
-void PanoramaMatcher::init(Size2i frameSize)
+void PanoramaMatcher::init(Size2i frameSize, Size2i _offset)
 {
     m_frameSize = frameSize;
+    m_cropOffset = _offset;
     m_isTracked = false;
 
     Size2i numBlockInMask(std::max(1, cvRound(m_frameSize.width / m_backgroundTileSize)), std::max(1, cvRound(m_frameSize.height / m_backgroundTileSize))); //в области ~20x20 подсчитывается background фичи
-    m_backMask = Mat::zeros(numBlockInMask, CV_8UC1); // TODO: работа с маской требует обработки при распараллеливании
-    m_carMask = Mat::zeros(numBlockInMask, CV_8UC1);
+    m_backMask = Mat::zeros(numBlockInMask, CV_16UC1);
+    m_carMask = Mat::zeros(numBlockInMask, CV_16UC1);
+    m_sizeBlockInMask = Size2i(frameSize.width / m_backMask.cols + (int)(frameSize.width % m_backMask.cols != 0),
+                               frameSize.height / m_backMask.rows + (int)(frameSize.height % m_backMask.rows != 0));
     m_prevDescriptors.release();
     m_prevKeypoints.clear();
 }
 
-std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint> &keypoints, int prevX, InputArray _mask)
+std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, const std::vector<KeyPoint> &keypoints, int prevX)
 {
     m_badMatches = 0;
     m_backMatches = 0;
     m_duplicateMatches = 0;
-
 
     Mat nextD = _nextDescriptors.getMat();
     if(nextD.empty() || m_prevDescriptors.empty())
@@ -1105,7 +1107,7 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
         m_prevKeypoints = keypoints;
         return std::vector<DMatch>();
     }
-    
+
     std::vector<DMatch> matches(nextD.rows);
     std::vector<DMatch> goodMatches;
     goodMatches.reserve(std::max(100, nextD.rows / 10));
@@ -1114,14 +1116,12 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
 
     m_backMask = cv::Scalar::all(0);
     m_carMask = cv::Scalar::all(0);
-    Size2i sizeBlockInMask(m_frameSize.width / m_backMask.cols + (int)(m_frameSize.width % m_backMask.cols != 0),
-                           m_frameSize.height / m_backMask.rows + (int)(m_frameSize.height % m_backMask.rows != 0));
     const cv::Range wholeRange(0, nextD.rows);
     const int nstripes = std::max(1, std::min(cv::getNumThreads(), nextD.rows));
     std::vector<cv::Mat> backMasks(nstripes);
     for (auto& stripeMask : backMasks)
     {
-        stripeMask = m_carMask.clone();
+        stripeMask = m_backMask.clone();
     }
     const float backgroundDist = m_backgroundDist*m_backgroundDist;
     // Параллельный цикл по строкам nextD
@@ -1147,8 +1147,9 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
                     break; // дальше только больше по y
 
                 float dist = (keypoints[i].pt.x - m_prevKeypoints[j].pt.x)*(keypoints[i].pt.x - m_prevKeypoints[j].pt.x) +
-                             (keypoints[i].pt.y - m_prevKeypoints[j].pt.y)*(keypoints[i].pt.y - m_prevKeypoints[j].pt.y) / 6.f;
-                if (dist <= backgroundDist)
+                             (keypoints[i].pt.y - m_prevKeypoints[j].pt.y)*(keypoints[i].pt.y - m_prevKeypoints[j].pt.y) / 3.f;
+                if (dist <= backgroundDist &&
+                    std::max(keypoints[i].size, m_prevKeypoints[j].size)*m_sizeDiff < std::min(keypoints[i].size, m_prevKeypoints[j].size))
                 {
                     const float* row2 = m_prevDescriptors.ptr<float>(j);
                     float d = hal::normL2Sqr_(row1, row2, descriptorLen);
@@ -1166,8 +1167,8 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
             if (isBackground)
             {
                 // найдём координату фичи фона в маске фона
-                Point2i pointInd((int)keypoints[i].pt.x / sizeBlockInMask.width, (int)keypoints[i].pt.y/sizeBlockInMask.height);
-                backMasks[stripe_idx].at<uint8_t>(pointInd) += uint8_t{1}; // TODO: заменить at на ptr
+                Point2i pointInd = getBlockInd(keypoints[i]);
+                backMasks[stripe_idx].at<uint16_t>(pointInd) += uint16_t{1}; // TODO: заменить at на ptr
                 continue;
             }
         }
@@ -1183,6 +1184,11 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
     std::vector<int> backMatchesPerStripe(nstripes, 0);
     std::vector<int> badMatchesPerStripe(nstripes, 0);
     std::vector<int> duplicateMatchesPerStripe(nstripes, 0);
+    std::vector<cv::Mat> carMasks(nstripes);
+    for (auto& stripeMask : carMasks)
+    {
+        stripeMask = m_carMask.clone();
+    }
     const int goodReserve = std::max(10, nextD.rows / std::max(1, 10 * nstripes));
     for (auto& stripeMatches : goodMatchesPerStripe)
         stripeMatches.reserve(goodReserve);
@@ -1195,8 +1201,8 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
         for (int i = range.start; i < range.end; ++i)
         {
             const float* row1 = nextD.ptr<float>(i);
-            Point2i pointInd((int)keypoints[i].pt.x/sizeBlockInMask.width, (int)keypoints[i].pt.y/sizeBlockInMask.height);
-            bool isBackground = matches[i].imgIdx == -2 || m_backMask.at<uint8_t>(pointInd) > m_maxBackgroundFeatures; // TODO: заменить at на ptr
+            Point2i pointInd = getBlockInd(keypoints[i]);
+            bool isBackground = matches[i].imgIdx == -2 || m_backMask.at<uint16_t>(pointInd) > m_maxBackgroundFeatures; // TODO: заменить at на ptr
             if (isBackground)
             {
                 backMatchesPerStripe[stripe_idx] += 1;
@@ -1260,6 +1266,7 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
                 tmp.trainIdx = i;
                 tmp.imgIdx = keypoints[i].octave & 255;
                 goodMatchesPerStripe[stripe_idx].emplace_back(tmp);
+                carMasks[stripe_idx].at<uint16_t>(pointInd) += uint16_t{1}; // TODO: заменить at на ptr
             }
         }
     }, nstripes);
@@ -1272,13 +1279,13 @@ std::vector<DMatch> PanoramaMatcher::custom_match(InputArray _nextDescriptors, c
         goodMatches.insert(goodMatches.end(),
                            std::make_move_iterator(goodMatchesPerStripe[s].begin()),
                            std::make_move_iterator(goodMatchesPerStripe[s].end()));
+        m_carMask += carMasks[s];
     }
 
     m_prevDescriptors = nextD;
     m_prevKeypoints = keypoints;
     return goodMatches;
 }
-
 
 #ifdef HAVE_OPENCL
 static bool ocl_radiusMatch(InputArray query, InputArray _train, std::vector< std::vector<DMatch> > &matches,
